@@ -4,7 +4,7 @@ use graph::{
     components::ethereum::{
         EthereumBlockData, EthereumCallData, EthereumEventData, EthereumTransactionData,
     },
-    runtime::{asc_get, asc_new, try_asc_get, AscPtr, AscType, AscValue, ToAscObj},
+    runtime::{asc_get, asc_new, try_asc_get, AscIndexId, AscPtr, AscType, AscValue, ToAscObj},
 };
 use graph::{data::store, runtime::DeterministicHostError};
 use graph::{prelude::serde_json, runtime::FromAscObj};
@@ -416,7 +416,7 @@ impl ToAscObj<AscEthereumTransaction_0_0_2> for EthereumTransactionData {
     }
 }
 
-impl<T: AscType> ToAscObj<AscEthereumEvent<T>> for EthereumEventData
+impl<T: AscType + AscIndexId> ToAscObj<AscEthereumEvent<T>> for EthereumEventData
 where
     EthereumTransactionData: ToAscObj<T>,
 {
@@ -529,7 +529,8 @@ impl<T: AscValue> ToAscObj<AscWrapped<T>> for AscWrapped<T> {
 impl<V, VAsc> ToAscObj<AscResult<AscPtr<VAsc>, bool>> for Result<V, bool>
 where
     V: ToAscObj<VAsc>,
-    VAsc: AscType,
+    VAsc: AscType + AscIndexId,
+    AscWrapped<AscPtr<VAsc>>: AscIndexId,
 {
     fn to_asc_obj<H: AscHeap + ?Sized>(
         &self,
