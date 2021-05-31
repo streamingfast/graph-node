@@ -1593,6 +1593,7 @@ pub(crate) fn parse_call_triggers(
         Some(calls) => calls
             .iter()
             .filter(move |call| call_filter.matches(call))
+            .filter(move |call| block.transaction_for_call_succeeded(call))
             .map(move |call| EthereumTrigger::Call(Arc::new(call.clone())))
             .collect(),
         None => vec![],

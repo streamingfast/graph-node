@@ -112,6 +112,35 @@ pub struct EthereumBlockWithCalls {
     pub calls: Option<Vec<EthereumCall>>,
 }
 
+impl EthereumBlockWithCalls {
+    /// Given an `EthereumCall`, check within receipts if that transaction was successful.
+    pub fn transaction_for_call_succeeded(&self, call: &EthereumCall) -> bool {
+        // return true if call does not have a transaction hash.
+        // TODO: should we return `false` instead?
+        let call_transaction_hash = match call.transaction_hash {
+            Some(transaction_hash) => transaction_hash,
+            None => return true,
+        };
+
+        // TODO: if there is no transaction receipt, should we return `true` instead?
+        let receipt = match self
+            .ethereum_block
+            .transaction_receipts
+            .iter()
+            .find(|txn| txn.transaction_hash == call_transaction_hash)
+        {
+            Some(receipt) => receipt,
+            None => return false,
+        };
+
+        // TODO: should we handle None differently than Some(0)?
+        match receipt.status {
+            Some(x) if x == web3::types::U64::from(1) => true,
+            Some(_) | None => false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct EthereumBlock {
     pub block: Arc<LightEthereumBlock>,
