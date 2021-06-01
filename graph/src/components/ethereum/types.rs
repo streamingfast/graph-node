@@ -12,6 +12,8 @@ use crate::{
     prelude::{BlockNumber, DeploymentHash, EntityKey, ToEntityKey},
 };
 
+const BYZANTIUM_FORK_BLOCK_NUMBER: u64 = 4_370_000;
+
 pub type LightEthereumBlock = Block<Transaction>;
 
 pub trait LightEthereumBlockExt {
@@ -114,29 +116,48 @@ pub struct EthereumBlockWithCalls {
 
 impl EthereumBlockWithCalls {
     /// Given an `EthereumCall`, check within receipts if that transaction was successful.
-    pub fn transaction_for_call_succeeded(&self, call: &EthereumCall) -> bool {
-        // return true if call does not have a transaction hash.
-        // TODO: should we return `false` instead?
-        let call_transaction_hash = match call.transaction_hash {
-            Some(transaction_hash) => transaction_hash,
-            None => return true,
-        };
+    pub fn transaction_for_call_succeeded(&self, call: &EthereumCall) -> anyhow::Result<bool> {
+        let call_transaction_hash = call.transaction_hash.ok_or(anyhow::anyhow!(
+            "failed to find a transaction for this call"
+        ))?;
 
-        // TODO: if there is no transaction receipt, should we return `true` instead?
-        let receipt = match self
+        let receipt = self
             .ethereum_block
             .transaction_receipts
             .iter()
             .find(|txn| txn.transaction_hash == call_transaction_hash)
-        {
-            Some(receipt) => receipt,
-            None => return false,
-        };
+            .ok_or(anyhow::anyhow!(
+                "failed to find the receipt for this transaction"
+            ))?;
 
-        // TODO: should we handle None differently than Some(0)?
+        let transaction = self
+            .ethereum_block
+            .block
+            .transaction_for_call(&call)
+            .ok_or(anyhow::anyhow!(
+                "failed to find the transaction for this call"
+            ))?;
+
+        let pre_byzantium = self
+            .ethereum_block
+            .block
+            .number
+            .ok_or(anyhow::anyhow!("Pending block number"))?
+            .as_u64()
+            < BYZANTIUM_FORK_BLOCK_NUMBER;
+
+        let used_all_gas = receipt
+            .gas_used
+            .ok_or(anyhow::anyhow!("Running in light client mode)"))?
+            >= transaction.gas;
+
+        if pre_byzantium && used_all_gas {
+            return Ok(false);
+        }
+
         match receipt.status {
-            Some(x) if x == web3::types::U64::from(1) => true,
-            Some(_) | None => false,
+            Some(x) if x == web3::types::U64::from(1) => Ok(true),
+            Some(_) | None => Ok(false),
         }
     }
 }

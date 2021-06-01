@@ -1,14 +1,7 @@
+use ethabi::ParamType;
 use ethabi::Token;
 use futures::future;
 use futures::prelude::*;
-use lazy_static::lazy_static;
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::iter::FromIterator;
-use std::sync::Arc;
-use std::time::Instant;
-
-use ethabi::ParamType;
 use graph::{
     blockchain::{block_stream::BlockWithTriggers, BlockPtr, IngestorError},
     prelude::{
@@ -30,6 +23,13 @@ use graph::{
     components::ethereum::*,
     prelude::web3::types::{Trace, TraceFilter, TraceFilterBuilder, H160},
 };
+use itertools::Itertools;
+use lazy_static::lazy_static;
+use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
+use std::iter::FromIterator;
+use std::sync::Arc;
+use std::time::Instant;
 use web3::api::Web3;
 use web3::transports::batch::Batch;
 use web3::types::Filter;
@@ -1588,15 +1588,21 @@ pub(crate) fn parse_log_triggers(
 pub(crate) fn parse_call_triggers(
     call_filter: &EthereumCallFilter,
     block: &EthereumBlockWithCalls,
-) -> Vec<EthereumTrigger> {
+) -> anyhow::Result<Vec<EthereumTrigger>> {
     match &block.calls {
         Some(calls) => calls
             .iter()
             .filter(move |call| call_filter.matches(call))
-            .filter(move |call| block.transaction_for_call_succeeded(call))
-            .map(move |call| EthereumTrigger::Call(Arc::new(call.clone())))
+            .map(
+                move |call| match block.transaction_for_call_succeeded(call) {
+                    Ok(true) => Ok(Some(EthereumTrigger::Call(Arc::new(call.clone())))),
+                    Ok(false) => Ok(None),
+                    Err(e) => Err(e),
+                },
+            )
+            .filter_map_ok(|some_trigger| some_trigger)
             .collect(),
-        None => vec![],
+        None => Ok(vec![]),
     }
 }
 
