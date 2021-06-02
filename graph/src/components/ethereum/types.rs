@@ -12,8 +12,6 @@ use crate::{
     prelude::{BlockNumber, DeploymentHash, EntityKey, ToEntityKey},
 };
 
-const BYZANTIUM_FORK_BLOCK_NUMBER: u64 = 4_370_000;
-
 pub type LightEthereumBlock = Block<Transaction>;
 
 pub trait LightEthereumBlockExt {
@@ -138,20 +136,12 @@ impl EthereumBlockWithCalls {
                 "failed to find the transaction for this call"
             ))?;
 
-        let pre_byzantium = self
-            .ethereum_block
-            .block
-            .number
-            .ok_or(anyhow::anyhow!("Pending block number"))?
-            .as_u64()
-            < BYZANTIUM_FORK_BLOCK_NUMBER;
-
-        let used_all_gas = receipt
+        // assume the transaction failed if all gas was used
+        if receipt
             .gas_used
             .ok_or(anyhow::anyhow!("Running in light client mode)"))?
-            >= transaction.gas;
-
-        if pre_byzantium && used_all_gas {
+            >= transaction.gas
+        {
             return Ok(false);
         }
 
