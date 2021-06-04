@@ -5,14 +5,15 @@ use futures::prelude::*;
 use graph::{
     blockchain::{block_stream::BlockWithTriggers, BlockPtr, IngestorError},
     prelude::{
-        anyhow, async_trait, debug, error, ethabi,
+        anyhow::{self, anyhow, bail},
+        async_trait, debug, error, ethabi,
         futures03::{self, compat::Future01CompatExt, FutureExt, StreamExt, TryStreamExt},
         hex, retry, stream, tiny_keccak, trace, warn,
         web3::{
             self,
             types::{
                 Address, Block, BlockId, BlockNumber as Web3BlockNumber, Bytes, CallRequest,
-                FilterBuilder, Log, H256,
+                Filter, FilterBuilder, Log, Transaction, TransactionReceipt, H256,
             },
         },
         BlockNumber, ChainStore, CheapClone, DynTryFuture, Error, EthereumCallCache, Logger,
@@ -32,7 +33,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use web3::api::Web3;
 use web3::transports::batch::Batch;
-use web3::types::Filter;
 
 use crate::{
     adapter::{
@@ -707,8 +707,13 @@ impl EthereumAdapter {
             return Box::new(stream::empty());
         }
 
+        let eth2 = eth.clone(); // TODO: figure out how to avoid those clones
+
         Box::new(
             eth.trace_stream(&logger, subgraph_metrics, from, to, addresses)
+                .filter(
+                    move |trace| trace_transaction_succeeded(&trace, &eth2).unwrap(), /* TODO: handle this Result */
+                )
                 .filter_map(|trace| EthereumCall::try_from_trace(&trace))
                 .filter(move |call| {
                     // `trace_filter` can only filter by calls `to` an address and
@@ -1634,4 +1639,53 @@ pub(crate) fn parse_block_triggers(
         ));
     }
     triggers
+}
+
+/// Inspects the status for this trace's transaction.
+fn trace_transaction_succeeded(trace: &Trace, eth: &EthereumAdapter) -> anyhow::Result<bool> {
+    let transaction_hash = trace
+        .transaction_hash
+        .ok_or_else(|| anyhow!("Trace has no transaction hash"))?;
+
+    // check for receipt in database
+    // todo!()
+
+    // check for receipt in external client
+    let eth = eth.web3.eth();
+    let (transaction, receipt) =
+        futures03::executor::block_on(fetch_transaction_and_receipt(&eth, transaction_hash))?;
+
+    // assume the transaction failed if all gas was used
+    if receipt
+        .gas_used
+        .ok_or(anyhow::anyhow!("Running in light client mode)"))?
+        >= transaction.gas
+    {
+        return Ok(false);
+    }
+
+    match receipt.status {
+        Some(x) if x == web3::types::U64::from(1) => Ok(true),
+        Some(_) | None => Ok(false),
+    }
+}
+
+async fn fetch_transaction_and_receipt(
+    eth: &web3::api::Eth<Transport>,
+    transaction_hash: H256,
+) -> anyhow::Result<(Transaction, TransactionReceipt)> {
+    let transaction = match eth.transaction(transaction_hash.into()).compat().await {
+        Ok(Some(transaction)) => transaction,
+        Err(_) | Ok(None) => bail!("Failed to fetch transaction"),
+    };
+
+    let receipt = match eth
+        .transaction_receipt(transaction_hash.into())
+        .compat()
+        .await
+    {
+        Ok(Some(receipt)) => receipt,
+        Err(_) | Ok(None) => bail!("Failed to fetch receipt"),
+    };
+    Ok((transaction, receipt))
 }
