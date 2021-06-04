@@ -1664,10 +1664,7 @@ fn trace_transaction_succeeded(trace: &Trace, eth: &EthereumAdapter) -> anyhow::
         return Ok(false);
     }
 
-    match receipt.status {
-        Some(x) if x == web3::types::U64::from(1) => Ok(true),
-        Some(_) | None => Ok(false),
-    }
+    Ok(matches!(receipt.status, Some(x) if x == web3::types::U64::from(1)))
 }
 
 async fn fetch_transaction_and_receipt(
