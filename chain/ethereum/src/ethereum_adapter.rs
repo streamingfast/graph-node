@@ -689,6 +689,7 @@ impl EthereumAdapter {
         from: BlockNumber,
         to: BlockNumber,
         call_filter: &'a EthereumCallFilter,
+        chain_store: Arc<dyn ChainStore>,
     ) -> Box<dyn Stream<Item = EthereumCall, Error = Error> + Send + 'a> {
         let eth = self.clone();
 
@@ -711,9 +712,10 @@ impl EthereumAdapter {
 
         Box::new(
             eth.trace_stream(&logger, subgraph_metrics, from, to, addresses)
-                .filter(
-                    move |trace| trace_transaction_succeeded(&trace, &eth2).unwrap(), /* TODO: handle this Result */
-                )
+                .filter(move |trace| {
+                    // TODO: handle this Result/unwrap
+                    trace_transaction_succeeded(&trace, &eth2, &chain_store).unwrap()
+                })
                 .filter_map(|trace| EthereumCall::try_from_trace(&trace))
                 .filter(move |call| {
                     // `trace_filter` can only filter by calls `to` an address and
@@ -1420,10 +1422,17 @@ pub(crate) async fn blocks_with_triggers(
 
     if !filter.call.is_empty() {
         trigger_futs.push(Box::new(
-            eth.calls_in_block_range(&logger, subgraph_metrics.clone(), from, to, &filter.call)
-                .map(Arc::new)
-                .map(EthereumTrigger::Call)
-                .collect(),
+            eth.calls_in_block_range(
+                &logger,
+                subgraph_metrics.clone(),
+                from,
+                to,
+                &filter.call,
+                chain_store.clone(),
+            )
+            .map(Arc::new)
+            .map(EthereumTrigger::Call)
+            .collect(),
         ));
     }
 
@@ -1442,14 +1451,21 @@ pub(crate) async fn blocks_with_triggers(
         // in the block filter, transform the `block_filter` into
         // a `call_filter` and run `blocks_with_calls`
         trigger_futs.push(Box::new(
-            eth.calls_in_block_range(&logger, subgraph_metrics.clone(), from, to, &call_filter)
-                .map(|call| {
-                    EthereumTrigger::Block(
-                        BlockPtr::from(&call),
-                        EthereumBlockTriggerType::WithCallTo(call.to),
-                    )
-                })
-                .collect(),
+            eth.calls_in_block_range(
+                &logger,
+                subgraph_metrics.clone(),
+                from,
+                to,
+                &call_filter,
+                chain_store.clone(),
+            )
+            .map(|call| {
+                EthereumTrigger::Block(
+                    BlockPtr::from(&call),
+                    EthereumBlockTriggerType::WithCallTo(call.to),
+                )
+            })
+            .collect(),
         ));
     }
 
@@ -1642,18 +1658,25 @@ pub(crate) fn parse_block_triggers(
 }
 
 /// Inspects the status for this trace's transaction.
-fn trace_transaction_succeeded(trace: &Trace, eth: &EthereumAdapter) -> anyhow::Result<bool> {
+fn trace_transaction_succeeded(
+    trace: &Trace,
+    eth: &EthereumAdapter,
+    chain_store: &Arc<dyn ChainStore>,
+) -> anyhow::Result<bool> {
     let transaction_hash = trace
         .transaction_hash
         .ok_or_else(|| anyhow!("Trace has no transaction hash"))?;
 
-    // check for receipt in database
-    // todo!()
-
-    // check for receipt in external client
-    let eth = eth.web3.eth();
     let (transaction, receipt) =
-        futures03::executor::block_on(fetch_transaction_and_receipt(&eth, transaction_hash))?;
+        fetch_transaction_and_receipt_from_database(transaction_hash, chain_store).or_else(
+            move |_| {
+                // check for receipt in external client
+                futures03::executor::block_on(fetch_transaction_and_receipt_from_ethereum_client(
+                    &eth.web3.eth(),
+                    transaction_hash,
+                ))
+            },
+        )?;
 
     // assume the transaction failed if all gas was used
     if receipt
@@ -1667,7 +1690,7 @@ fn trace_transaction_succeeded(trace: &Trace, eth: &EthereumAdapter) -> anyhow::
     Ok(matches!(receipt.status, Some(x) if x == web3::types::U64::from(1)))
 }
 
-async fn fetch_transaction_and_receipt(
+async fn fetch_transaction_and_receipt_from_ethereum_client(
     eth: &web3::api::Eth<Transport>,
     transaction_hash: H256,
 ) -> anyhow::Result<(Transaction, TransactionReceipt)> {
@@ -1685,4 +1708,11 @@ async fn fetch_transaction_and_receipt(
         Err(_) | Ok(None) => bail!("Failed to fetch receipt"),
     };
     Ok((transaction, receipt))
+}
+
+fn fetch_transaction_and_receipt_from_database(
+    transaction_hash: H256,
+    chain_store: &Arc<dyn ChainStore>,
+) -> anyhow::Result<(Transaction, TransactionReceipt)> {
+    todo!()
 }
