@@ -156,6 +156,8 @@ pub enum Command {
     Chain(ChainCommand),
     /// Manipulate internal subgraph statistics
     Stats(StatsCommand),
+    /// Experimental: NEAR support
+    Near(NearCommand),
 }
 
 impl Command {
@@ -322,6 +324,14 @@ pub enum StatsCommand {
         nsp: String,
         /// The name of a table to fully count
         table: Option<String>,
+    },
+}
+
+#[derive(Clone, Debug, StructOpt)]
+pub enum NearCommand {
+    Run {
+        #[structopt(long, env = "NEAR_HOMEDIR", help = "NEAR indexer homedir\n")]
+        homedir: String,
     },
 }
 
@@ -596,6 +606,12 @@ async fn main() {
                     commands::stats::account_like(ctx.pools(), clear, table)
                 }
                 Show { nsp, table } => commands::stats::show(ctx.pools(), nsp, table),
+            }
+        }
+        Near(cmd) => {
+            use NearCommand::*;
+            match cmd {
+                Run { homedir } => commands::near::run(homedir),
             }
         }
     };

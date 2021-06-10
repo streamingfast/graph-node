@@ -5,6 +5,7 @@ pub mod copy;
 pub mod create;
 pub mod info;
 pub mod listen;
+pub mod near;
 pub mod query;
 pub mod remove;
 pub mod rewind;
