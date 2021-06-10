@@ -329,6 +329,12 @@ pub enum StatsCommand {
 
 #[derive(Clone, Debug, StructOpt)]
 pub enum NearCommand {
+    /// Initialize the NEAR homedir. This can take quite some time
+    Init {
+        #[structopt(long, env = "NEAR_HOMEDIR", help = "NEAR indexer homedir\n")]
+        homedir: String,
+    },
+    /// Run the indexer framework
     Run {
         #[structopt(long, env = "NEAR_HOMEDIR", help = "NEAR indexer homedir\n")]
         homedir: String,
@@ -612,6 +618,7 @@ async fn main() {
             use NearCommand::*;
             match cmd {
                 Run { homedir } => commands::near::run(homedir),
+                Init { homedir } => commands::near::init(homedir),
             }
         }
     };

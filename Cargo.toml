@@ -3,6 +3,7 @@ members = [
     "core",
     "chain/ethereum",
     "chain/arweave",
+    "chain/near",
     "graphql",
     "mock",
     "node",

@@ -1,0 +1,16 @@
+[package]
+name = "graph-chain-near"
+version = "0.22.0"
+edition = "2018"
+
+[dependencies]
+# You need to have cmake installed
+actix = "=0.11.0-beta.2"
+graph = { path = "../../graph" }
+openssl-probe = { version = "0.1.2" }
+tokio = { version = "1.1", features = ["sync", "time"] }
+tokio-stream = { version = "0.1" }
+tracing = "0.1.13"
+tracing-subscriber = "0.2.4"
+
+near-indexer = { git = "https://github.com/near/nearcore", rev="576b0a21fa78c320a66ca75739f10eaa25fdcdae" }
