@@ -1,3 +1,9 @@
+use anyhow::anyhow;
+use diesel::pg::PgConnection;
+use diesel::prelude::*;
+use diesel::r2d2::{ConnectionManager, PooledConnection};
+use diesel::sql_types::Text;
+use diesel::{insert_into, update};
 use graph::{
     constraint_violation,
     prelude::{
@@ -6,19 +12,13 @@ use graph::{
     },
 };
 
-use diesel::pg::PgConnection;
-use diesel::r2d2::{ConnectionManager, PooledConnection};
-use diesel::sql_types::Text;
-use diesel::{delete, prelude::*};
-use diesel::{insert_into, update};
-
 use graph::ensure;
 use std::{collections::HashMap, convert::TryFrom, sync::Arc};
 use std::{convert::TryInto, iter::FromIterator};
 
 use graph::prelude::{
-    web3::types::H256, BlockNumber, BlockPtr, Error, EthereumBlock, EthereumNetworkIdentifier,
-    LightEthereumBlock,
+    web3::types::{TransactionReceipt, H256},
+    BlockNumber, BlockPtr, Error, EthereumBlock, EthereumNetworkIdentifier, LightEthereumBlock,
 };
 
 use crate::{
@@ -44,8 +44,8 @@ pub use data::Storage;
 
 /// Encapuslate access to the blocks table for a chain.
 mod data {
-    use graph::{constraint_violation, prelude::StoreError};
 
+    use crate::transaction_receipt;
     use diesel::{connection::SimpleConnection, insert_into};
     use diesel::{delete, prelude::*, sql_query};
     use diesel::{dsl::sql, pg::PgConnection};
@@ -60,6 +60,7 @@ mod data {
         update,
     };
     use diesel_dynamic_schema as dds;
+    use graph::{constraint_violation, prelude::StoreError};
 
     use std::fmt;
     use std::iter::FromIterator;
@@ -1077,6 +1078,14 @@ mod data {
                 .execute(conn)
                 .unwrap();
         }
+        pub(crate) fn find_transaction_receipts_for_block(
+            &self,
+            conn: &PgConnection,
+            chain_name: &str,
+            block_hash: &H256,
+        ) -> anyhow::Result<Vec<transaction_receipt::LightTransactionReceipt>> {
+            transaction_receipt::find_transaction_receipts_for_block(conn, chain_name, block_hash)
+        }
     }
 }
 
@@ -1410,6 +1419,17 @@ impl ChainStoreTrait for ChainStore {
             .storage
             .block_number(&conn, hash)?
             .map(|number| (self.chain.clone(), number)))
+    }
+
+    fn transaction_receipts_for_block(
+        &self,
+        block_hash: H256,
+    ) -> Result<HashMap<H256, TransactionReceipt>, StoreError> {
+        let conn = self.get_conn()?;
+        let transactions =
+            self.storage
+                .find_transaction_receipts_for_block(&conn, &self.chain, &block_hash)?;
+        todo!("build hash map")
     }
 }
 

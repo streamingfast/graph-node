@@ -29,9 +29,9 @@ ethabi = { git = "https://github.com/graphprotocol/ethabi.git", branch = "master
 # We have a couple custom patches to web3.
 web3 = { git = "https://github.com/graphprotocol/rust-web3", branch = "master" }
 itertools = "0.10.0"
+diesel = { version = "1.4.6", features = ["postgres", "serde_json", "numeric", "r2d2"] }
 
 [dev-dependencies]
-diesel = { version = "1.4.6", features = ["postgres", "serde_json", "numeric", "r2d2"] }
 graph-core = { path = "../../core" }
 graph-store-postgres = { path = "../../store/postgres" }
 pretty_assertions = "0.7.2"

@@ -1,8 +1,9 @@
 use mockall::predicate::*;
 use mockall::*;
+use std::collections::HashMap;
 
 use graph::{components::store::DeploymentLocator, prelude::*};
-use web3::types::H256;
+use web3::types::{TransactionReceipt, H256};
 
 mock! {
     pub Store {
@@ -42,6 +43,9 @@ mock! {
         fn confirm_block_hash(&self, number: BlockNumber, hash: &H256) -> Result<usize, Error>;
 
         fn block_number(&self, block_hash: H256) -> Result<Option<(String, BlockNumber)>, StoreError>;
+
+        fn transaction_receipts_for_block(&self, block_hash: H256) -> Result<HashMap<H256, TransactionReceipt>, StoreError>;
+
     }
 }
 

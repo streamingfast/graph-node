@@ -1716,5 +1716,5 @@ fn fetch_transaction_and_receipt_from_database(
     transaction_hash: H256,
     chain_store: &Arc<dyn ChainStore>,
 ) -> anyhow::Result<(Transaction, TransactionReceipt)> {
-    todo!()
+    todo!("Implement this. Call a chain_store method.");
 }
