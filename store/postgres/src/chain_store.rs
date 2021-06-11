@@ -311,9 +311,7 @@ mod data {
 
             Ok(Self::Private(Schema::new(s)))
         }
-    }
 
-    impl Storage {
         /// Create dedicated database tables for this chain if it uses
         /// `Storage::Private`. If it uses `Storage::Shared`, do nothing since
         /// a regular migration will already have created the `ethereum_blocks`
