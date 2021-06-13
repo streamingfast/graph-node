@@ -83,7 +83,7 @@ pub(crate) fn find_transaction_receipts_for_block(
     block_hash: &H256,
 ) -> Result<Vec<LightTransactionReceipt>, Error> {
     use diesel::dsl::sql_query;
-    let query = "";
+    let query = include_str!("sql_queries/transaction_receipts.sql");
     sql_query(query)
         .bind::<Integer, _>(12556561)
         .get_results::<RawTransactionReceipt>(conn)
