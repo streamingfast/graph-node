@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use web3::types::{Address, TransactionReceipt, H256};
+use web3::types::{Address, H256};
 
 use crate::blockchain::Blockchain;
 use crate::data::subgraph::status;
@@ -1317,11 +1317,8 @@ pub trait ChainStore: Send + Sync + 'static {
     /// Find the block with `block_hash` and return the network name and number
     fn block_number(&self, block_hash: H256) -> Result<Option<(String, BlockNumber)>, StoreError>;
 
-    /// Tries to build a mapping between transaction ids and their receipts.
-    fn transaction_receipts_for_block(
-        &self,
-        block_hash: H256,
-    ) -> Result<HashMap<H256, TransactionReceipt>, StoreError>;
+    /// Tries to build a set of failed transactions hashes for a given block.
+    fn failed_transactions_in_block(&self, block_hash: H256) -> Result<HashSet<H256>, StoreError>;
 }
 
 pub trait EthereumCallCache: Send + Sync + 'static {

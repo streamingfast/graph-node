@@ -13,7 +13,11 @@ use graph::{
 };
 
 use graph::ensure;
-use std::{collections::HashMap, convert::TryFrom, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryFrom,
+    sync::Arc,
+};
 use std::{convert::TryInto, iter::FromIterator};
 
 use graph::prelude::{
@@ -1421,15 +1425,12 @@ impl ChainStoreTrait for ChainStore {
             .map(|number| (self.chain.clone(), number)))
     }
 
-    fn transaction_receipts_for_block(
-        &self,
-        block_hash: H256,
-    ) -> Result<HashMap<H256, TransactionReceipt>, StoreError> {
+    fn failed_transactions_in_block(&self, block_hash: H256) -> Result<HashSet<H256>, StoreError> {
         let conn = self.get_conn()?;
-        let transactions =
+        let receipts =
             self.storage
                 .find_transaction_receipts_for_block(&conn, &self.chain, &block_hash)?;
-        todo!("build hash map")
+        todo!("find transactions and match with receipts")
     }
 }
 
