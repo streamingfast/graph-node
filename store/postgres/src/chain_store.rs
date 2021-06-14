@@ -4,6 +4,7 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::sql_types::Text;
 use diesel::{insert_into, update};
+use graph::prelude::web3::types::{H256, U256};
 use graph::{
     constraint_violation,
     prelude::{
@@ -21,7 +22,6 @@ use std::{
 use std::{convert::TryInto, iter::FromIterator};
 
 use graph::prelude::{
-    web3::types::{TransactionReceipt, H256},
     BlockNumber, BlockPtr, Error, EthereumBlock, EthereumNetworkIdentifier, LightEthereumBlock,
 };
 
@@ -66,6 +66,7 @@ mod data {
     use diesel_dynamic_schema as dds;
     use graph::{constraint_violation, prelude::StoreError};
 
+    use std::collections::HashMap;
     use std::fmt;
     use std::iter::FromIterator;
     use std::sync::Arc;
@@ -1091,6 +1092,15 @@ mod data {
         ) -> anyhow::Result<Vec<transaction_receipt::LightTransactionReceipt>> {
             transaction_receipt::find_transaction_receipts_for_block(conn, chain_name, block_hash)
         }
+
+        pub(crate) fn find_gas_usage_for_transactions<'a>(
+            &self,
+            conn: &PgConnection,
+            chain_name: &str,
+            transaction_hashes: impl Iterator<Item = &'a H256>,
+        ) -> anyhow::Result<HashMap<&'a H256, Option<U256>>> {
+            todo!("implement this function")
+        }
     }
 }
 
@@ -1457,9 +1467,9 @@ impl ChainStoreTrait for ChainStore {
             }
         }
 
-        let transaction_gas_usage: HashMap<&U256, Option<&U256>> = self
+        let transaction_gas_usage: HashMap<&H256, Option<U256>> = self
             .storage
-            .find_gas_usage_for_transactions(&pending.keys())?;
+            .find_gas_usage_for_transactions(&conn, &self.chain, pending.keys().into_iter())?;
 
         todo!("compare gas usage and finish filtering transaction status")
     }
