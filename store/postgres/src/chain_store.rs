@@ -49,7 +49,7 @@ pub use data::Storage;
 /// Encapuslate access to the blocks table for a chain.
 mod data {
 
-    use crate::transaction_receipt;
+    use crate::{transaction_gas, transaction_receipt};
     use diesel::{connection::SimpleConnection, insert_into};
     use diesel::{delete, prelude::*, sql_query};
     use diesel::{dsl::sql, pg::PgConnection};
@@ -1084,6 +1084,8 @@ mod data {
                 .execute(conn)
                 .unwrap();
         }
+
+        /// Delegates to [`transaction_receipt::find_transaction_receipts_for_block`].
         pub(crate) fn find_transaction_receipts_for_block(
             &self,
             conn: &PgConnection,
@@ -1093,13 +1095,20 @@ mod data {
             transaction_receipt::find_transaction_receipts_for_block(conn, chain_name, block_hash)
         }
 
-        pub(crate) fn find_gas_usage_for_transactions<'a>(
+        /// Delegates to [`transaction_gas::find_transaction_gas_in_block`].
+        pub(crate) fn find_gas_usage_for_transactions(
             &self,
             conn: &PgConnection,
             chain_name: &str,
-            transaction_hashes: impl Iterator<Item = &'a H256>,
-        ) -> anyhow::Result<HashMap<&'a H256, Option<U256>>> {
-            todo!("implement this function")
+            block_hash: &H256,
+            transaction_hashes: &[&H256],
+        ) -> anyhow::Result<HashMap<H256, U256>> {
+            transaction_gas::find_transaction_gas_in_block(
+                conn,
+                chain_name,
+                transaction_hashes,
+                block_hash,
+            )
         }
     }
 }
@@ -1467,9 +1476,14 @@ impl ChainStoreTrait for ChainStore {
             }
         }
 
-        let transaction_gas_usage: HashMap<&H256, Option<U256>> = self
-            .storage
-            .find_gas_usage_for_transactions(&conn, &self.chain, pending.keys().into_iter())?;
+        let pending_transaction_hashes: Vec<&H256> = pending.keys().into_iter().collect();
+        let transaction_gas_usage: HashMap<H256, U256> =
+            self.storage.find_gas_usage_for_transactions(
+                &conn,
+                &self.chain,
+                &block_hash,
+                &pending_transaction_hashes,
+            )?;
 
         todo!("compare gas usage and finish filtering transaction status")
     }

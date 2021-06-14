@@ -7,6 +7,7 @@ use graph::prelude::web3::types::*;
 use itertools::Itertools;
 use std::convert::TryFrom;
 
+/// Parameters for querying for all transaction receipts of a given block.
 struct TransactionReceiptQuery<'a> {
     block_hash: &'a str,
     schema_name: &'a str,
@@ -110,7 +111,7 @@ impl LightTransactionReceipt {
 
 /// Converts Vec<u8> to [u8; N], where N is the vector's expected lenght.
 /// Fails if other than N bytes are transfered this way.
-fn drain_vector<I: IntoIterator<Item = u8>, const N: usize>(
+pub(crate) fn drain_vector<I: IntoIterator<Item = u8>, const N: usize>(
     source: I,
     size: usize,
 ) -> Result<[u8; N], anyhow::Error> {
@@ -151,6 +152,7 @@ impl TryFrom<RawTransactionReceipt> for LightTransactionReceipt {
     }
 }
 
+/// Queries the database for all the transaction receipts in a given block.
 pub(crate) fn find_transaction_receipts_for_block(
     conn: &PgConnection,
     chain_name: &str,
