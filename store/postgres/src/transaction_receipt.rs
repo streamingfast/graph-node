@@ -23,13 +23,8 @@ impl<'a> QueryFragment<Pg> for TransactionReceiptQuery<'a> {
     ///
     /// ```sql
     /// select
-    ///     decode(
-    ///         case when length(receipt ->> 'gasUsed') % 2 = 0 then
-    ///             ltrim(receipt ->> 'gasUsed', '0x')
-    ///         else
-    ///             replace((receipt ->> 'gasUsed'), 'x', '')
-    ///         end, 'hex') as gas_used,
-    ///     decode(replace(receipt ->> 'status', 'x', ''), 'hex') as status
+    ///     ethereum_hex_to_bytea(receipt ->> 'gasUsed') as gas_used,
+    ///     ethereum_hex_to_bytea(receipt ->> 'status') as status
     /// from (
     ///     select
     ///         jsonb_array_elements(data -> 'transaction_receipts') as receipt
@@ -40,14 +35,9 @@ impl<'a> QueryFragment<Pg> for TransactionReceiptQuery<'a> {
     ///```
     fn walk_ast(&self, mut out: diesel::query_builder::AstPass<Pg>) -> QueryResult<()> {
         out.push_sql(
-            r#"
-select decode(
-    case when length(receipt ->> 'gasUsed') % 2 = 0 then
-        ltrim(receipt ->> 'gasUsed', '0x')
-    else
-        replace((receipt ->> 'gasUsed'), 'x', '')
-    end, 'hex') as gas_used,
-    decode(replace(receipt ->> 'status', 'x', ''), 'hex') as status
+            r#"select
+    ethereum_hex_to_bytea(receipt ->> 'gasUsed') as gas_used,
+    ethereum_hex_to_bytea(receipt ->> 'status') as status
 from (
     select jsonb_array_elements(data -> 'transaction_receipts') as receipt
     from"#,
