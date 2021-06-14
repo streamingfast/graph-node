@@ -34,6 +34,13 @@ pub(crate) struct LightTransactionReceipt {
     pub status: Option<U64>,
 }
 
+impl LightTransactionReceipt {
+    pub fn is_sucessful(&self) -> bool {
+        // EIP-658
+        matches!(self.status, Some(status) if !status.is_zero())
+    }
+}
+
 /// Converts Vec<u8> to [u8; N], where N is the vector's expected lenght.
 /// Fails if other than N bytes are transfered this way.
 fn drain_vector<I: IntoIterator<Item = u8>, const N: usize>(

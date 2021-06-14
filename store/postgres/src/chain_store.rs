@@ -72,8 +72,9 @@ mod data {
     use std::{convert::TryFrom, io::Write};
 
     use graph::prelude::{
-        serde_json, web3::types::H256, BlockNumber, BlockPtr, Error, EthereumBlock,
-        LightEthereumBlock,
+        serde_json,
+        web3::types::{H256, U256},
+        BlockNumber, BlockPtr, Error, EthereumBlock, LightEthereumBlock,
     };
 
     mod public {
@@ -1425,12 +1426,42 @@ impl ChainStoreTrait for ChainStore {
             .map(|number| (self.chain.clone(), number)))
     }
 
+    /// Tries to obtain all failed transactions for a given block.
+    ///
+    /// According to EIP-658, there are two ways of checking if a transaction failed:
+    /// 1. by checking if it ran out of gas.
+    /// 2. by looking at its receipt "status" boolean field, which may be absent for blocks before
+    ///    Byzantium fork.
+    ///
+    /// This function will only compare gas exhaustion for transactions when their respective
+    /// receipts contain no information about their status.
     fn failed_transactions_in_block(&self, block_hash: H256) -> Result<HashSet<H256>, StoreError> {
         let conn = self.get_conn()?;
         let receipts =
             self.storage
                 .find_transaction_receipts_for_block(&conn, &self.chain, &block_hash)?;
-        todo!("find transactions and match with receipts")
+
+        let mut failed = Vec::new();
+        let mut pending = HashMap::new();
+        for receipt in receipts.into_iter() {
+            match (receipt.status, receipt.gas_used) {
+                (Some(_succeeded), _) if receipt.is_sucessful() => { /* we can ignore those */ }
+                (Some(_failed), _) => failed.push(receipt.transaction_hash),
+                (None, Some(gas_used)) => {
+                    pending.insert(receipt.transaction_hash, gas_used);
+                }
+                (None, None) => {
+                    // We have no information to verify if this transaction was sucessful
+                    failed.push(receipt.transaction_hash)
+                }
+            }
+        }
+
+        let transaction_gas_usage: HashMap<&U256, Option<&U256>> = self
+            .storage
+            .find_gas_usage_for_transactions(&pending.keys())?;
+
+        todo!("compare gas usage and finish filtering transaction status")
     }
 }
 

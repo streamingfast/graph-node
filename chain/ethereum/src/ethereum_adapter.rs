@@ -1667,16 +1667,15 @@ fn trace_transaction_succeeded(
         .transaction_hash
         .ok_or_else(|| anyhow!("Trace has no transaction hash"))?;
 
-    let (transaction, receipt) =
-        fetch_transaction_and_receipt_from_database(transaction_hash, chain_store).or_else(
-            move |_| {
-                // check for receipt in external client
-                futures03::executor::block_on(fetch_transaction_and_receipt_from_ethereum_client(
-                    &eth.web3.eth(),
-                    transaction_hash,
-                ))
-            },
-        )?;
+    todo!("Check in database if this transaction failed. This function should receive a &HashSet of failed transactions.");
+
+    let (transaction, receipt) = {
+        // check for receipt in external client
+        futures03::executor::block_on(fetch_transaction_and_receipt_from_ethereum_client(
+            &eth.web3.eth(),
+            transaction_hash,
+        ))?
+    };
 
     // assume the transaction failed if all gas was used
     if receipt
@@ -1710,11 +1709,4 @@ async fn fetch_transaction_and_receipt_from_ethereum_client(
         Err(error) => bail!("Failed to fetch transaction receipt: {}", error),
     };
     Ok((transaction, receipt))
-}
-
-fn fetch_transaction_and_receipt_from_database(
-    transaction_hash: H256,
-    chain_store: &Arc<dyn ChainStore>,
-) -> anyhow::Result<(Transaction, TransactionReceipt)> {
-    todo!("Implement this. Call a chain_store method.");
 }
