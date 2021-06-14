@@ -1,14 +1,81 @@
-use anyhow::anyhow;
 use anyhow::{ensure, Error};
+use diesel::pg::{Pg, PgConnection};
 use diesel::prelude::*;
-use diesel::sql_types::{Binary, Integer, Nullable};
-
+use diesel::query_builder::{Query, QueryFragment};
+use diesel::sql_types::{Binary, Nullable, Text};
 use graph::prelude::web3::types::*;
 use itertools::Itertools;
 use std::convert::TryFrom;
 
+struct TransactionReceiptQuery<'a> {
+    block_hash: &'a str,
+    schema_name: &'a str,
+}
+
+impl<'a> diesel::query_builder::QueryId for TransactionReceiptQuery<'a> {
+    type QueryId = ();
+    const HAS_STATIC_QUERY_ID: bool = false;
+}
+
+impl<'a> QueryFragment<Pg> for TransactionReceiptQuery<'a> {
+    /// Writes the following SQL:
+    ///
+    /// ```sql
+    /// select
+    ///     decode(
+    ///         case when length(receipt ->> 'gasUsed') % 2 = 0 then
+    ///             ltrim(receipt ->> 'gasUsed', '0x')
+    ///         else
+    ///             replace((receipt ->> 'gasUsed'), 'x', '')
+    ///         end, 'hex') as gas_used,
+    ///     decode(replace(receipt ->> 'status', 'x', ''), 'hex') as status
+    /// from (
+    ///     select
+    ///         jsonb_array_elements(data -> 'transaction_receipts') as receipt
+    ///     from
+    ///         $CHAIN_SCHEMA.blocks
+    ///     where
+    ///         number = $BLOCK_NUMBER) as aliased;
+    ///```
+    fn walk_ast(&self, mut out: diesel::query_builder::AstPass<Pg>) -> QueryResult<()> {
+        out.push_sql(
+            r#"
+select decode(
+    case when length(receipt ->> 'gasUsed') % 2 = 0 then
+        ltrim(receipt ->> 'gasUsed', '0x')
+    else
+        replace((receipt ->> 'gasUsed'), 'x', '')
+    end, 'hex') as gas_used,
+    decode(replace(receipt ->> 'status', 'x', ''), 'hex') as status
+from (
+    select jsonb_array_elements(data -> 'transaction_receipts') as receipt
+    from"#,
+        );
+        out.push_identifier(&self.schema_name)?;
+        out.push_sql(".");
+        out.push_identifier("blocks")?;
+        out.push_sql(" where hash = ");
+        out.push_bind_param::<Text, _>(&self.block_hash)?;
+        out.push_sql(") as foo;");
+        Ok(())
+    }
+}
+
+impl<'a> Query for TransactionReceiptQuery<'a> {
+    type SqlType = (
+        Binary,
+        Binary,
+        Nullable<Binary>,
+        Nullable<Binary>,
+        Nullable<Binary>,
+        Nullable<Binary>,
+    );
+}
+
+impl<'a> RunQueryDsl<PgConnection> for TransactionReceiptQuery<'a> {}
+
 /// Type that comes straight out of a SQL query
-#[derive(QueryableByName)]
+#[derive(QueryableByName, Queryable)]
 struct RawTransactionReceipt {
     #[sql_type = "Binary"]
     transaction_hash: Vec<u8>,
@@ -89,13 +156,21 @@ pub(crate) fn find_transaction_receipts_for_block(
     chain_name: &str,
     block_hash: &H256,
 ) -> Result<Vec<LightTransactionReceipt>, Error> {
-    use diesel::dsl::sql_query;
-    let query = include_str!("sql_queries/transaction_receipts.sql");
-    sql_query(query)
-        .bind::<Integer, _>(12556561)
+    let block_hash_as_str = convert_hash_to_string(block_hash);
+
+    let query = TransactionReceiptQuery {
+        block_hash: block_hash_as_str,
+        schema_name: chain_name,
+    };
+
+    query
         .get_results::<RawTransactionReceipt>(conn)
         .or_else(|e| Err(anyhow::anyhow!("Error fetching from database: {}", e)))?
         .into_iter()
         .map(|r| LightTransactionReceipt::try_from(r))
         .collect()
+}
+
+fn convert_hash_to_string(_input: &H256) -> &str {
+    todo!()
 }
