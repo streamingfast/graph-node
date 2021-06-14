@@ -1680,7 +1680,7 @@ fn trace_transaction_succeeded(
     // assume the transaction failed if all gas was used
     if receipt
         .gas_used
-        .ok_or(anyhow::anyhow!("Running in light client mode)"))?
+        .ok_or(anyhow::anyhow!("Running in light client mode"))?
         >= transaction.gas
     {
         return Ok(false);
