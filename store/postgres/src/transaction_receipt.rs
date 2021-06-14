@@ -35,7 +35,7 @@ impl<'a> QueryFragment<Pg> for TransactionReceiptQuery<'a> {
     ///     from
     ///         $CHAIN_SCHEMA.blocks
     ///     where
-    ///         number = $BLOCK_NUMBER) as aliased;
+    ///         hash = $BLOCK_HASH) as foo;
     ///```
     fn walk_ast(&self, mut out: diesel::query_builder::AstPass<Pg>) -> QueryResult<()> {
         out.push_sql(
@@ -155,22 +155,22 @@ pub(crate) fn find_transaction_receipts_for_block(
     conn: &PgConnection,
     chain_name: &str,
     block_hash: &H256,
-) -> Result<Vec<LightTransactionReceipt>, Error> {
-    let block_hash_as_str = convert_hash_to_string(block_hash);
-
+) -> anyhow::Result<Vec<LightTransactionReceipt>> {
     let query = TransactionReceiptQuery {
-        block_hash: block_hash_as_str,
+        // convert block_hash to its string representation
+        block_hash: &format!("0x{}", hex::encode(block_hash.as_bytes())),
         schema_name: chain_name,
     };
 
     query
         .get_results::<RawTransactionReceipt>(conn)
-        .or_else(|e| Err(anyhow::anyhow!("Error fetching from database: {}", e)))?
+        .or_else(|error| {
+            Err(anyhow::anyhow!(
+                "Error fetching transaction receipt from database: {}",
+                error
+            ))
+        })?
         .into_iter()
-        .map(|r| LightTransactionReceipt::try_from(r))
+        .map(LightTransactionReceipt::try_from)
         .collect()
-}
-
-fn convert_hash_to_string(_input: &H256) -> &str {
-    todo!()
 }

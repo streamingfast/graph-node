@@ -33,6 +33,7 @@ diesel_derives = "1.4.1"
 git-testament = "0.2.0"
 anyhow = "1.0.41"
 itertools = "0.10.1"
+hex = "0.4.3"
 
 [dev-dependencies]
 clap = "2.33.3"
