@@ -1175,6 +1175,7 @@ impl ChainStore {
     }
 
     pub(crate) fn drop_chain(&self) -> Result<(), Error> {
+        use diesel::dsl::delete;
         use public::ethereum_networks as n;
 
         let conn = self.get_conn()?;
