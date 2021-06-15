@@ -1460,32 +1460,53 @@ impl ChainStoreTrait for ChainStore {
             self.storage
                 .find_transaction_receipts_for_block(&conn, &self.chain, &block_hash)?;
 
-        let mut failed = Vec::new();
+        let mut failed = HashSet::new();
         let mut pending = HashMap::new();
         for receipt in receipts.into_iter() {
             match (receipt.status, receipt.gas_used) {
                 (Some(_succeeded), _) if receipt.is_sucessful() => { /* we can ignore those */ }
-                (Some(_failed), _) => failed.push(receipt.transaction_hash),
+                (Some(_failed), _) => {
+                    failed.insert(receipt.transaction_hash);
+                }
                 (None, Some(gas_used)) => {
                     pending.insert(receipt.transaction_hash, gas_used);
                 }
                 (None, None) => {
-                    // We have no information to verify if this transaction was sucessful
-                    failed.push(receipt.transaction_hash)
+                    // We don't have information to verify if this transaction was sucessful
+                    failed.insert(receipt.transaction_hash);
                 }
             }
         }
 
-        let pending_transaction_hashes: Vec<&H256> = pending.keys().into_iter().collect();
-        let transaction_gas_usage: HashMap<H256, U256> =
-            self.storage.find_gas_usage_for_transactions(
-                &conn,
-                &self.chain,
-                &block_hash,
-                &pending_transaction_hashes,
-            )?;
+        if pending.is_empty() {
+            return Ok(failed);
+        };
 
-        todo!("compare gas usage and finish filtering transaction status")
+        // If there are pending transactions we then query the stor for how much gas they had.
+        let pending_transaction_hashes: Vec<&H256> = pending.keys().into_iter().collect();
+        let transaction_gas: HashMap<H256, U256> = self.storage.find_gas_usage_for_transactions(
+            &conn,
+            &self.chain,
+            &block_hash,
+            &pending_transaction_hashes,
+        )?;
+
+        for (transaction_hash, gas_used) in pending.into_iter() {
+            match transaction_gas.get(&transaction_hash) {
+                Some(gas) if gas_used >= *gas => {
+                    failed.insert(transaction_hash);
+                }
+                Some(_) => { /* transaction succeeded */ }
+                None => {
+                    return Err(StoreError::Unknown(anyhow::anyhow!(
+                        "Failed to find transaction in block: Transaction Hash = {}, Block Hash = {}",
+                        transaction_hash,
+                        block_hash
+                    )));
+                }
+            };
+        }
+        Ok(failed)
     }
 }
 
