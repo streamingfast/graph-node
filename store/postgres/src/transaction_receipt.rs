@@ -1,4 +1,3 @@
-use anyhow::ensure;
 use diesel::{
     pg::{Pg, PgConnection},
     prelude::*,
@@ -36,7 +35,12 @@ impl<'a> QueryFragment<Pg> for TransactionReceiptQuery<'a> {
     ///```
     fn walk_ast(&self, mut out: diesel::query_builder::AstPass<Pg>) -> QueryResult<()> {
         out.push_sql(
-            r#"select
+            r#"
+select
+    ethereum_hex_to_bytea(receipt ->> 'transactionHash') as transaction_hash,
+    ethereum_hex_to_bytea(receipt ->> 'transactionIndex') as transaction_index,
+    ethereum_hex_to_bytea(receipt ->> 'blockHash') as block_hash,
+    ethereum_hex_to_bytea(receipt ->> 'blockNumber') as block_number,
     ethereum_hex_to_bytea(receipt ->> 'gasUsed') as gas_used,
     ethereum_hex_to_bytea(receipt ->> 'status') as status
 from (
@@ -46,7 +50,7 @@ from (
         out.push_identifier(&self.schema_name)?;
         out.push_sql(".");
         out.push_identifier("blocks")?;
-        out.push_sql(" where number between");
+        out.push_sql(" where number between ");
         out.push_bind_param::<Integer, _>(&self.block_range.start)?;
         out.push_sql(" and ");
         out.push_bind_param::<Integer, _>(&self.block_range.end)?;
@@ -103,14 +107,12 @@ impl LightTransactionReceipt {
 }
 
 /// Converts Vec<u8> to [u8; N], where N is the vector's expected lenght.
-/// Fails if other than N bytes are transfered this way.
-pub(crate) fn drain_vector<I: IntoIterator<Item = u8>, const N: usize>(
-    source: I,
-    size: usize,
-) -> Result<[u8; N], anyhow::Error> {
+/// Fails if input size is larger than output size.
+pub(crate) fn drain_vector<const N: usize>(input: Vec<u8>) -> Result<[u8; N], anyhow::Error> {
+    anyhow::ensure!(input.len() <= N, "source is larger than output");
     let mut output = [0u8; N];
-    let bytes_read = output.iter_mut().set_from(source);
-    ensure!(bytes_read == size, "failed reading bytes from source");
+    let start = output.len() - input.len();
+    output[start..].iter_mut().set_from(input);
     Ok(output)
 }
 
@@ -127,12 +129,12 @@ impl TryFrom<RawTransactionReceipt> for LightTransactionReceipt {
             status,
         } = value;
 
-        let transaction_hash = drain_vector(transaction_hash, 32)?;
-        let transaction_index = drain_vector(transaction_index, 8)?;
-        let block_hash = block_hash.map(|x| drain_vector(x, 32)).transpose()?;
-        let block_number = block_number.map(|x| drain_vector(x, 8)).transpose()?;
-        let gas_used = gas_used.map(|x| drain_vector(x, 32)).transpose()?;
-        let status = status.map(|x| drain_vector(x, 8)).transpose()?;
+        let transaction_hash = drain_vector(transaction_hash)?;
+        let transaction_index = drain_vector(transaction_index)?;
+        let block_hash = block_hash.map(drain_vector).transpose()?;
+        let block_number = block_number.map(drain_vector).transpose()?;
+        let gas_used = gas_used.map(drain_vector).transpose()?;
+        let status = status.map(drain_vector).transpose()?;
 
         Ok(LightTransactionReceipt {
             transaction_hash: transaction_hash.into(),

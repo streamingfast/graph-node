@@ -27,7 +27,23 @@ impl<'a> QueryFragment<Pg> for TransactionGasQuery<'a> {
     /// Writes the following SQL:
     ///
     /// ```sql
-    /// TODO: update this docstring.
+    /// select
+    ///     ethereum_hex_to_bytea (txn ->> 'hash') as transaction_hash,
+    ///     ethereum_hex_to_bytea (txn ->> 'gas')
+    /// from (
+    ///     select
+    ///         jsonb_array_elements(block -> 'transactions') as txn
+    ///     from (
+    ///         select
+    ///             data -> 'block' as block
+    ///         from
+    ///             CHAIN_NAME.blocks
+    ///         where
+    ///             number between $START_BLOCK
+    ///             and $END_BLOCK) as blocks) as transactions
+    /// where
+    ///     ethereum_hex_to_bytea (txn ->> 'hash') in ($LIST_OF_TRANSACTION_HASHES)
+    ///
     ///```
     fn walk_ast(&self, mut out: diesel::query_builder::AstPass<Pg>) -> QueryResult<()> {
         out.push_sql(
@@ -48,7 +64,7 @@ from (
         out.push_sql(".blocks where number between ");
         out.push_bind_param::<Integer, _>(&self.block_range.start)?;
         out.push_sql(" and ");
-        out.push_bind_param::<Integer, _>(&self.block_range.start)?;
+        out.push_bind_param::<Integer, _>(&self.block_range.end)?;
         out.push_sql(") as blocks) as transactions ");
         out.push_sql("where ethereum_hex_to_bytea(txn ->> 'hash') in (");
 
@@ -59,8 +75,7 @@ from (
                 out.push_sql(", ")
             }
         }
-
-        out.push_sql(") limit 5");
+        out.push_sql(")");
         Ok(())
     }
 }
@@ -94,8 +109,8 @@ impl TryFrom<RawTransactionGas> for TransactionGas {
             transaction_hash,
             gas,
         } = value;
-        let transaction_hash = drain_vector(transaction_hash, 32)?;
-        let gas = drain_vector(gas, 8)?;
+        let transaction_hash = drain_vector(transaction_hash)?;
+        let gas = drain_vector(gas)?;
 
         Ok(TransactionGas {
             transaction_hash: transaction_hash.into(),
@@ -112,7 +127,6 @@ pub(crate) fn find_transaction_gas_in_block_range(
     block_range: &Range<BlockNumber>,
 ) -> anyhow::Result<HashMap<H256, U256>> {
     let query = TransactionGasQuery {
-        // convert block_hash to its string representation
         block_range,
         transaction_hashes,
         schema_name: chain_name,
