@@ -710,7 +710,7 @@ impl EthereumAdapter {
 
         // Hit the database and fetch all failed transactions in the block range.
         // TODO: handle this Result/expect
-        let transaction_statuses_in_block_range = chain_store
+        let mut transaction_statuses_in_block_range = chain_store
             .transaction_statuses_in_block_range(&(from..to))
             .expect("failed to fetch failed transactions in the database");
 
@@ -720,8 +720,12 @@ impl EthereumAdapter {
             eth.trace_stream(&logger, subgraph_metrics, from, to, addresses)
                 .filter(move |trace| {
                     // TODO: handle this Result/expect
-                    trace_transaction_succeeded(&trace, &eth2, &transaction_statuses_in_block_range)
-                        .expect("failed to determine if trace's transaction has failed")
+                    trace_transaction_succeeded(
+                        &trace,
+                        &eth2,
+                        &mut transaction_statuses_in_block_range,
+                    )
+                    .expect("failed to determine if trace's transaction has failed")
                 })
                 .filter_map(|trace| EthereumCall::try_from_trace(&trace))
                 .filter(move |call| {
@@ -1668,7 +1672,7 @@ pub(crate) fn parse_block_triggers(
 fn trace_transaction_succeeded(
     trace: &Trace,
     eth: &EthereumAdapter,
-    failed_transactions: &HashMap<H256, bool>,
+    failed_transactions: &mut HashMap<H256, bool>,
 ) -> anyhow::Result<bool> {
     let transaction_hash = trace
         .transaction_hash
@@ -1693,10 +1697,15 @@ fn trace_transaction_succeeded(
         .ok_or(anyhow::anyhow!("Running in light client mode"))?
         >= transaction.gas
     {
+        // update our source of truth to prevent future api calls for the same transaction
+        failed_transactions.insert(transaction_hash, false);
         return Ok(false);
     }
 
-    Ok(matches!(receipt.status, Some(x) if x == web3::types::U64::from(1)))
+    let status = matches!(receipt.status, Some(x) if x == web3::types::U64::from(1));
+    // update our source of truth to prevent future api calls for the same transaction
+    failed_transactions.insert(transaction_hash, status);
+    Ok(status)
 }
 
 async fn fetch_transaction_and_receipt_from_ethereum_client(
