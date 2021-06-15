@@ -1,6 +1,7 @@
 use mockall::predicate::*;
 use mockall::*;
 use std::collections::HashSet;
+use std::ops::Range;
 
 use graph::{components::store::DeploymentLocator, prelude::*};
 use web3::types::H256;
@@ -44,7 +45,7 @@ mock! {
 
         fn block_number(&self, block_hash: H256) -> Result<Option<(String, BlockNumber)>, StoreError>;
 
-        fn failed_transactions_in_block(&self, block_hash: H256) -> Result<HashSet<H256>, StoreError>;
+        fn failed_transactions_in_block_range(&self, block_range: &Range<BlockNumber>) -> Result<HashSet<H256>, StoreError>;
 
     }
 }

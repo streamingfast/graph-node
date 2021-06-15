@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fmt;
 use std::fmt::Display;
+use std::ops::Range;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -1318,7 +1319,10 @@ pub trait ChainStore: Send + Sync + 'static {
     fn block_number(&self, block_hash: H256) -> Result<Option<(String, BlockNumber)>, StoreError>;
 
     /// Tries to build a set of failed transactions hashes for a given block.
-    fn failed_transactions_in_block(&self, block_hash: H256) -> Result<HashSet<H256>, StoreError>;
+    fn failed_transactions_in_block_range(
+        &self,
+        block_range: &Range<BlockNumber>,
+    ) -> Result<HashSet<H256>, StoreError>;
 }
 
 pub trait EthereumCallCache: Send + Sync + 'static {

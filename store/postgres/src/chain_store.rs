@@ -16,10 +16,11 @@ use graph::{
 use graph::ensure;
 use std::{
     collections::{HashMap, HashSet},
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
+    iter::FromIterator,
+    ops::Range,
     sync::Arc,
 };
-use std::{convert::TryInto, iter::FromIterator};
 
 use graph::prelude::{
     BlockNumber, BlockPtr, Error, EthereumBlock, EthereumNetworkIdentifier, LightEthereumBlock,
@@ -69,6 +70,7 @@ mod data {
     use std::collections::HashMap;
     use std::fmt;
     use std::iter::FromIterator;
+    use std::ops::Range;
     use std::sync::Arc;
     use std::{convert::TryFrom, io::Write};
 
@@ -1085,25 +1087,29 @@ mod data {
                 .unwrap();
         }
 
-        /// Delegates to [`transaction_receipt::find_transaction_receipts_for_block`].
-        pub(crate) fn find_transaction_receipts_for_block(
+        /// Delegates to [`transaction_receipt::find_transaction_receipts_for_block_range`].
+        pub(crate) fn find_transaction_receipts_for_block_range(
             &self,
             conn: &PgConnection,
             chain_name: &str,
-            block_hash: &H256,
+            block_range: &Range<BlockNumber>,
         ) -> anyhow::Result<Vec<transaction_receipt::LightTransactionReceipt>> {
-            transaction_receipt::find_transaction_receipts_for_block(conn, chain_name, block_hash)
+            transaction_receipt::find_transaction_receipts_for_block_range(
+                conn,
+                chain_name,
+                block_range,
+            )
         }
 
-        /// Delegates to [`transaction_gas::find_transaction_gas_in_block`].
-        pub(crate) fn find_gas_usage_for_transactions(
+        /// Delegates to [`transaction_gas::find_transaction_gas_in_block_range`].
+        pub(crate) fn find_gas_usage_for_transactions_in_block_range(
             &self,
             conn: &PgConnection,
             chain_name: &str,
-            block_hash: &H256,
+            block_hash: &Range<BlockNumber>,
             transaction_hashes: &[&H256],
         ) -> anyhow::Result<HashMap<H256, U256>> {
-            transaction_gas::find_transaction_gas_in_block(
+            transaction_gas::find_transaction_gas_in_block_range(
                 conn,
                 chain_name,
                 transaction_hashes,
@@ -1455,11 +1461,16 @@ impl ChainStoreTrait for ChainStore {
     ///
     /// This function will only compare gas exhaustion for transactions when their respective
     /// receipts contain no information about their status.
-    fn failed_transactions_in_block(&self, block_hash: H256) -> Result<HashSet<H256>, StoreError> {
+    fn failed_transactions_in_block_range(
+        &self,
+        block_range: &Range<BlockNumber>,
+    ) -> Result<HashSet<H256>, StoreError> {
         let conn = self.get_conn()?;
-        let receipts =
-            self.storage
-                .find_transaction_receipts_for_block(&conn, &self.chain, &block_hash)?;
+        let receipts = self.storage.find_transaction_receipts_for_block_range(
+            &conn,
+            &self.chain,
+            &block_range,
+        )?;
 
         let mut failed = HashSet::new();
         let mut pending = HashMap::new();
@@ -1485,12 +1496,14 @@ impl ChainStoreTrait for ChainStore {
 
         // If there are pending transactions we then query the stor for how much gas they had.
         let pending_transaction_hashes: Vec<&H256> = pending.keys().into_iter().collect();
-        let transaction_gas: HashMap<H256, U256> = self.storage.find_gas_usage_for_transactions(
-            &conn,
-            &self.chain,
-            &block_hash,
-            &pending_transaction_hashes,
-        )?;
+        let transaction_gas: HashMap<H256, U256> = self
+            .storage
+            .find_gas_usage_for_transactions_in_block_range(
+                &conn,
+                &self.chain,
+                block_range,
+                &pending_transaction_hashes,
+            )?;
 
         for (transaction_hash, gas_used) in pending.into_iter() {
             match transaction_gas.get(&transaction_hash) {
@@ -1500,9 +1513,8 @@ impl ChainStoreTrait for ChainStore {
                 Some(_) => { /* transaction succeeded */ }
                 None => {
                     return Err(StoreError::Unknown(anyhow::anyhow!(
-                        "Failed to find transaction in block: Transaction Hash = {}, Block Hash = {}",
+                        "Failed to find transaction in block: Transaction Hash = {}",
                         transaction_hash,
-                        block_hash
                     )));
                 }
             };

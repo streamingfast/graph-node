@@ -1,15 +1,17 @@
-use anyhow::{ensure, Error};
-use diesel::pg::{Pg, PgConnection};
-use diesel::prelude::*;
-use diesel::query_builder::{Query, QueryFragment};
-use diesel::sql_types::{Binary, Nullable, Text};
-use graph::prelude::web3::types::*;
+use anyhow::ensure;
+use diesel::{
+    pg::{Pg, PgConnection},
+    prelude::*,
+    query_builder::{Query, QueryFragment},
+    sql_types::{Binary, Integer, Nullable},
+};
+use graph::prelude::{web3::types::*, BlockNumber};
 use itertools::Itertools;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, ops::Range};
 
 /// Parameters for querying for all transaction receipts of a given block.
 struct TransactionReceiptQuery<'a> {
-    block_hash: &'a str,
+    block_range: &'a Range<BlockNumber>,
     schema_name: &'a str,
 }
 
@@ -30,8 +32,7 @@ impl<'a> QueryFragment<Pg> for TransactionReceiptQuery<'a> {
     ///         jsonb_array_elements(data -> 'transaction_receipts') as receipt
     ///     from
     ///         $CHAIN_SCHEMA.blocks
-    ///     where
-    ///         hash = $BLOCK_HASH) as foo;
+    ///     where number between $FIRST_BLOCK and $LAST BLOCK) as foo;
     ///```
     fn walk_ast(&self, mut out: diesel::query_builder::AstPass<Pg>) -> QueryResult<()> {
         out.push_sql(
@@ -45,8 +46,10 @@ from (
         out.push_identifier(&self.schema_name)?;
         out.push_sql(".");
         out.push_identifier("blocks")?;
-        out.push_sql(" where hash = ");
-        out.push_bind_param::<Text, _>(&self.block_hash)?;
+        out.push_sql(" where number between");
+        out.push_bind_param::<Integer, _>(&self.block_range.start)?;
+        out.push_sql(" and ");
+        out.push_bind_param::<Integer, _>(&self.block_range.end)?;
         out.push_sql(") as foo;");
         Ok(())
     }
@@ -142,16 +145,15 @@ impl TryFrom<RawTransactionReceipt> for LightTransactionReceipt {
     }
 }
 
-/// Queries the database for all the transaction receipts in a given block.
-pub(crate) fn find_transaction_receipts_for_block(
+/// Queries the database for all the transaction receipts in a given block range.
+pub(crate) fn find_transaction_receipts_for_block_range(
     conn: &PgConnection,
     chain_name: &str,
-    block_hash: &H256,
+    block_range: &Range<BlockNumber>,
 ) -> anyhow::Result<Vec<LightTransactionReceipt>> {
     let query = TransactionReceiptQuery {
-        // convert block_hash to its string representation
-        block_hash: &format!("0x{}", hex::encode(block_hash.as_bytes())),
         schema_name: chain_name,
+        block_range,
     };
 
     query

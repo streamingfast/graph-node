@@ -1,15 +1,19 @@
 use super::transaction_receipt::drain_vector;
-use diesel::pg::{Pg, PgConnection};
-use diesel::prelude::*;
-use diesel::query_builder::{Query, QueryFragment, QueryId};
-use diesel::sql_types::Binary;
-use graph::prelude::web3::types::{H256, U256};
-use std::collections::HashMap;
-use std::convert::TryFrom;
+use diesel::{
+    pg::{Pg, PgConnection},
+    prelude::*,
+    query_builder::{Query, QueryFragment, QueryId},
+    sql_types::{Binary, Integer},
+};
+use graph::prelude::{
+    web3::types::{H256, U256},
+    BlockNumber,
+};
+use std::{collections::HashMap, convert::TryFrom, ops::Range};
 
 /// Parameters for querying for all transaction gas for a given block.
 struct TransactionGasQuery<'a> {
-    block_hash: &'a H256,
+    block_range: &'a Range<BlockNumber>,
     transaction_hashes: &'a [&'a H256],
     schema_name: &'a str,
 }
@@ -29,23 +33,22 @@ impl<'a> QueryFragment<Pg> for TransactionGasQuery<'a> {
         out.push_sql(
             r#"
 select
-    block_hash,
     ethereum_hex_to_bytea (txn ->> 'hash') as transaction_hash,
     ethereum_hex_to_bytea (txn ->> 'gas')
 from (
     select
-        hash as block_hash,
         jsonb_array_elements(block -> 'transactions') as txn
     from (
         select
-            hash,
             data -> 'block' as block
         from
 "#,
         );
         out.push_identifier(&self.schema_name)?;
-        out.push_sql(".blocks where hash = ");
-        out.push_bind_param::<Binary, _>(&self.block_hash.as_bytes())?;
+        out.push_sql(".blocks where number between ");
+        out.push_bind_param::<Integer, _>(&self.block_range.start)?;
+        out.push_sql(" and ");
+        out.push_bind_param::<Integer, _>(&self.block_range.start)?;
         out.push_sql(") as blocks) as transactions ");
         out.push_sql("where ethereum_hex_to_bytea(txn ->> 'hash') in (");
 
@@ -101,16 +104,16 @@ impl TryFrom<RawTransactionGas> for TransactionGas {
     }
 }
 
-/// Queries the database for gas used by given transactions in a given block.
-pub(crate) fn find_transaction_gas_in_block(
+/// Queries the database for gas used by given transactions in a given block range.
+pub(crate) fn find_transaction_gas_in_block_range(
     conn: &PgConnection,
     chain_name: &str,
     transaction_hashes: &[&H256],
-    block_hash: &H256,
+    block_range: &Range<BlockNumber>,
 ) -> anyhow::Result<HashMap<H256, U256>> {
     let query = TransactionGasQuery {
         // convert block_hash to its string representation
-        block_hash,
+        block_range,
         transaction_hashes,
         schema_name: chain_name,
     };
