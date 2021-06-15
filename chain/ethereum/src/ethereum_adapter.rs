@@ -708,14 +708,20 @@ impl EthereumAdapter {
             return Box::new(stream::empty());
         }
 
-        todo!("obtain a set of failed transaction hashes from store");
+        // Hit the database and fetch all failed transactions in the block range.
+        // TODO: handle this Result/expect
+        let transaction_statuses_in_block_range = chain_store
+            .transaction_statuses_in_block_range(&(from..to))
+            .expect("failed to fetch failed transactions in the database");
+
         let eth2 = eth.clone(); // TODO: figure out how to avoid those clones
 
         Box::new(
             eth.trace_stream(&logger, subgraph_metrics, from, to, addresses)
                 .filter(move |trace| {
-                    // TODO: handle this Result/unwrap
-                    trace_transaction_succeeded(&trace, &eth2, &chain_store).unwrap()
+                    // TODO: handle this Result/expect
+                    trace_transaction_succeeded(&trace, &eth2, &transaction_statuses_in_block_range)
+                        .expect("failed to determine if trace's transaction has failed")
                 })
                 .filter_map(|trace| EthereumCall::try_from_trace(&trace))
                 .filter(move |call| {
@@ -1662,23 +1668,26 @@ pub(crate) fn parse_block_triggers(
 fn trace_transaction_succeeded(
     trace: &Trace,
     eth: &EthereumAdapter,
-    chain_store: &Arc<dyn ChainStore>,
+    failed_transactions: &HashMap<H256, bool>,
 ) -> anyhow::Result<bool> {
     let transaction_hash = trace
         .transaction_hash
         .ok_or_else(|| anyhow!("Trace has no transaction hash"))?;
 
-    todo!("Check in database if this transaction failed. This function should receive a &HashSet of failed transactions.");
+    // Check if our store has any track of this transaction status
+    if let Some(status) = failed_transactions.get(&transaction_hash) {
+        return Ok(*status);
+    }
 
+    // If not, check for that transaction's receipt in the external client
     let (transaction, receipt) = {
-        // check for receipt in external client
         futures03::executor::block_on(fetch_transaction_and_receipt_from_ethereum_client(
             &eth.web3.eth(),
             transaction_hash,
         ))?
     };
 
-    // assume the transaction failed if all gas was used
+    // Assume the transaction failed if all gas was used
     if receipt
         .gas_used
         .ok_or(anyhow::anyhow!("Running in light client mode"))?

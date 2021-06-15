@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
@@ -15,7 +14,7 @@ use graph::{
 
 use graph::ensure;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     iter::FromIterator,
     ops::Range,
@@ -1452,7 +1451,7 @@ impl ChainStoreTrait for ChainStore {
             .map(|number| (self.chain.clone(), number)))
     }
 
-    /// Tries to obtain all failed transactions for a given block.
+    /// Tries to obtain transaction statuses for a given block range.
     ///
     /// According to EIP-658, there are two ways of checking if a transaction failed:
     /// 1. by checking if it ran out of gas.
@@ -1461,10 +1460,10 @@ impl ChainStoreTrait for ChainStore {
     ///
     /// This function will only compare gas exhaustion for transactions when their respective
     /// receipts contain no information about their status.
-    fn failed_transactions_in_block_range(
+    fn transaction_statuses_in_block_range(
         &self,
         block_range: &Range<BlockNumber>,
-    ) -> Result<HashSet<H256>, StoreError> {
+    ) -> Result<HashMap<H256, bool>, StoreError> {
         let conn = self.get_conn()?;
         let receipts = self.storage.find_transaction_receipts_for_block_range(
             &conn,
@@ -1472,29 +1471,28 @@ impl ChainStoreTrait for ChainStore {
             &block_range,
         )?;
 
-        let mut failed = HashSet::new();
+        let mut statuses = HashMap::new();
         let mut pending = HashMap::new();
         for receipt in receipts.into_iter() {
             match (receipt.status, receipt.gas_used) {
-                (Some(_succeeded), _) if receipt.is_sucessful() => { /* we can ignore those */ }
-                (Some(_failed), _) => {
-                    failed.insert(receipt.transaction_hash);
+                (Some(_status), _) => {
+                    statuses.insert(receipt.transaction_hash, receipt.is_sucessful());
                 }
                 (None, Some(gas_used)) => {
                     pending.insert(receipt.transaction_hash, gas_used);
                 }
                 (None, None) => {
                     // We don't have information to verify if this transaction was sucessful
-                    failed.insert(receipt.transaction_hash);
+                    statuses.insert(receipt.transaction_hash, false);
                 }
             }
         }
 
         if pending.is_empty() {
-            return Ok(failed);
+            return Ok(statuses);
         };
 
-        // If there are pending transactions we then query the stor for how much gas they had.
+        // If there are pending transactions we then query the store for how much gas they had.
         let pending_transaction_hashes: Vec<&H256> = pending.keys().into_iter().collect();
         let transaction_gas: HashMap<H256, U256> = self
             .storage
@@ -1507,10 +1505,9 @@ impl ChainStoreTrait for ChainStore {
 
         for (transaction_hash, gas_used) in pending.into_iter() {
             match transaction_gas.get(&transaction_hash) {
-                Some(gas) if gas_used >= *gas => {
-                    failed.insert(transaction_hash);
+                Some(gas) => {
+                    statuses.insert(transaction_hash, gas_used >= *gas);
                 }
-                Some(_) => { /* transaction succeeded */ }
                 None => {
                     return Err(StoreError::Unknown(anyhow::anyhow!(
                         "Failed to find transaction in block: Transaction Hash = {}",
@@ -1519,7 +1516,7 @@ impl ChainStoreTrait for ChainStore {
                 }
             };
         }
-        Ok(failed)
+        Ok(statuses)
     }
 }
 

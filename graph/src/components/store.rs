@@ -1318,11 +1318,11 @@ pub trait ChainStore: Send + Sync + 'static {
     /// Find the block with `block_hash` and return the network name and number
     fn block_number(&self, block_hash: H256) -> Result<Option<(String, BlockNumber)>, StoreError>;
 
-    /// Tries to build a set of failed transactions hashes for a given block.
-    fn failed_transactions_in_block_range(
+    /// Tries to build a mapping of transactions statuses for a given block.
+    fn transaction_statuses_in_block_range(
         &self,
         block_range: &Range<BlockNumber>,
-    ) -> Result<HashSet<H256>, StoreError>;
+    ) -> Result<HashMap<H256, bool>, StoreError>;
 }
 
 pub trait EthereumCallCache: Send + Sync + 'static {
