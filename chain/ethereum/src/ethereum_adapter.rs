@@ -708,6 +708,7 @@ impl EthereumAdapter {
             return Box::new(stream::empty());
         }
 
+        todo!("obtain a set of failed transaction hashes from store");
         let eth2 = eth.clone(); // TODO: figure out how to avoid those clones
 
         Box::new(
