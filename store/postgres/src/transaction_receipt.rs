@@ -1,3 +1,11 @@
+//! Code for retrieving transaction receipts from the database.
+//!
+//! This module exposes:
+//! 1. the [`find_transaction_receipts_for_block_range`] function, that queries the database and returns
+//!    transaction receipts for a given block range.
+//! 2. the [`LightTransactionReceipt`] type, which holds basic information about the retrieved
+//!    transaction receipts.
+
 use diesel::{
     pg::{Pg, PgConnection},
     prelude::*,

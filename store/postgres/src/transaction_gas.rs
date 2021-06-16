@@ -1,3 +1,8 @@
+//! Code for retrieving transaction gas information from the database.
+//!
+//! This module exposes the [`find_transaction_gas_in_block_range`] function, that queries the
+//! database and returns how much gas each transaction were issued with.
+
 use super::transaction_receipt::drain_vector;
 use diesel::{
     pg::{Pg, PgConnection},
@@ -96,7 +101,7 @@ struct RawTransactionGas {
 }
 
 /// Like web3::types::Transaction, but with fewer fields.
-pub(crate) struct TransactionGas {
+struct TransactionGas {
     pub transaction_hash: H256,
     pub gas: U256,
 }
