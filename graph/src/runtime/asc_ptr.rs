@@ -55,7 +55,7 @@ impl<C: AscType + AscIndexId> AscPtr<C> {
             _ => self.read_len(heap),
         }?;
         let bytes = heap.get(self.0, len)?;
-        C::from_asc_bytes(&bytes)
+        C::from_asc_bytes(&bytes, heap.api_version())
     }
 
     /// Allocate `asc_obj` as an Asc object of class `C`.
@@ -179,8 +179,11 @@ impl<T> AscType for AscPtr<T> {
         self.0.to_asc_bytes()
     }
 
-    fn from_asc_bytes(asc_obj: &[u8]) -> Result<Self, DeterministicHostError> {
-        let bytes = u32::from_asc_bytes(asc_obj)?;
+    fn from_asc_bytes(
+        asc_obj: &[u8],
+        api_version: Version,
+    ) -> Result<Self, DeterministicHostError> {
+        let bytes = u32::from_asc_bytes(asc_obj, api_version)?;
         Ok(AscPtr::new(bytes))
     }
 }

@@ -413,7 +413,10 @@ impl AscType for DummyMappingTrigger {
         todo!()
     }
 
-    fn from_asc_bytes(_asc_obj: &[u8]) -> Result<Self, DeterministicHostError> {
+    fn from_asc_bytes(
+        _asc_obj: &[u8],
+        _api_version: semver::Version,
+    ) -> Result<Self, DeterministicHostError> {
         todo!()
     }
 }
