@@ -630,8 +630,8 @@ impl UnresolvedMapping {
 
         let api_version = Version::parse(&api_version)?;
 
-        ensure!(VersionReq::parse("<= 0.0.4").unwrap().matches(&api_version),
-            "The maximum supported mapping API version of this indexer is 0.0.4, but `{}` was found",
+        ensure!(VersionReq::parse("<= 0.0.5").unwrap().matches(&api_version),
+            "The maximum supported mapping API version of this indexer is 0.0.5, but `{}` was found",
             api_version
         );
 
