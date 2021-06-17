@@ -8,7 +8,10 @@ mod types;
 
 // Try to reexport most of the necessary types
 use crate::{
-    components::store::{DeploymentLocator, StoredDynamicDataSource},
+    components::{
+        metrics::stopwatch::StopwatchMetrics,
+        store::{DeploymentLocator, StoredDynamicDataSource},
+    },
     data::subgraph::{Mapping, Source, TemplateSource},
     prelude::DataSourceContext,
 };
@@ -91,6 +94,7 @@ pub trait Blockchain: Debug + Sized + Send + Sync + 'static {
         &self,
         loc: &DeploymentLocator,
         capabilities: &Self::NodeCapabilities,
+        stopwatch_metrics: Arc<StopwatchMetrics>,
     ) -> Result<Arc<Self::TriggersAdapter>, Error>;
 
     fn new_block_stream(

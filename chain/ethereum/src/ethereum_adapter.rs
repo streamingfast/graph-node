@@ -2,6 +2,7 @@ use ethabi::ParamType;
 use ethabi::Token;
 use futures::future;
 use futures::prelude::*;
+use graph::prelude::StopwatchMetrics;
 use graph::{
     blockchain::{block_stream::BlockWithTriggers, BlockPtr, IngestorError},
     prelude::{
@@ -690,8 +691,11 @@ impl EthereumAdapter {
         to: BlockNumber,
         call_filter: &'a EthereumCallFilter,
         chain_store: Arc<dyn ChainStore>,
+        stopwatch_metrics: &'a Arc<StopwatchMetrics>,
     ) -> Box<dyn Stream<Item = EthereumCall, Error = Error> + Send + 'a> {
+        stopwatch_metrics.start_section("calls_in_block_range");
         let eth = self.clone();
+        let eth2 = eth.clone(); // TODO: figure out how to avoid those clones
 
         let addresses: Vec<H160> = call_filter
             .contract_addresses_function_signatures
@@ -710,11 +714,12 @@ impl EthereumAdapter {
 
         // Hit the database and fetch all failed transactions in the block range.
         // TODO: handle this Result/expect
-        let mut transaction_statuses_in_block_range = chain_store
-            .transaction_statuses_in_block_range(&(from..to))
-            .expect("failed to fetch failed transactions in the database");
-
-        let eth2 = eth.clone(); // TODO: figure out how to avoid those clones
+        let mut transaction_statuses_in_block_range = {
+            stopwatch_metrics.start_section("calls_in_block_range__fetch_transaction_statuses");
+            chain_store
+                .transaction_statuses_in_block_range(&(from..to))
+                .expect("failed to fetch failed transactions in the database")
+        };
 
         Box::new(
             eth.trace_stream(&logger, subgraph_metrics, from, to, addresses)
@@ -724,6 +729,7 @@ impl EthereumAdapter {
                         &trace,
                         &eth2,
                         &mut transaction_statuses_in_block_range,
+                        &stopwatch_metrics,
                     )
                     .expect("failed to determine if trace's transaction has failed")
                 })
@@ -1397,6 +1403,7 @@ pub(crate) async fn blocks_with_triggers(
     logger: Logger,
     chain_store: Arc<dyn ChainStore>,
     subgraph_metrics: Arc<SubgraphEthRpcMetrics>,
+    stopwatch_metrics: Arc<StopwatchMetrics>,
     from: BlockNumber,
     to: BlockNumber,
     filter: &TriggerFilter,
@@ -1440,6 +1447,7 @@ pub(crate) async fn blocks_with_triggers(
                 to,
                 &filter.call,
                 chain_store.clone(),
+                &stopwatch_metrics,
             )
             .map(Arc::new)
             .map(EthereumTrigger::Call)
@@ -1469,6 +1477,7 @@ pub(crate) async fn blocks_with_triggers(
                 to,
                 &call_filter,
                 chain_store.clone(),
+                &&stopwatch_metrics,
             )
             .map(|call| {
                 EthereumTrigger::Block(
@@ -1673,7 +1682,9 @@ fn trace_transaction_succeeded(
     trace: &Trace,
     eth: &EthereumAdapter,
     failed_transactions: &mut HashMap<H256, bool>,
+    stopwatch_metrics: &StopwatchMetrics,
 ) -> anyhow::Result<bool> {
+    stopwatch_metrics.start_section("calls_in_block_range__trace_transaction_succeeded");
     let transaction_hash = trace
         .transaction_hash
         .ok_or_else(|| anyhow!("Trace has no transaction hash"))?;

@@ -360,12 +360,6 @@ where
             .with_context(|| format!("no chain configured for network {}", network))?
             .clone();
 
-        let triggers_adapter = chain.triggers_adapter(&deployment, &required_capabilities).map_err(|e|
-                anyhow!(
-                "expected triggers adapter that matches deployment {} with required capabilities: {}: {}",
-                &deployment,
-                &required_capabilities, e))?.clone();
-
         // Obtain filters from the manifest
         let filter = C::TriggerFilter::from_data_sources(manifest.data_sources.iter());
         let start_blocks = manifest.start_blocks();
@@ -376,6 +370,13 @@ where
         // ownership of the manifest and host builder into the new instance
         let stopwatch_metrics =
             StopwatchMetrics::new(logger.clone(), deployment.hash.clone(), registry.clone());
+
+        let triggers_adapter = chain.triggers_adapter(&deployment, &required_capabilities, Arc::new(stopwatch_metrics.clone())).map_err(|e|
+                anyhow!(
+                "expected triggers adapter that matches deployment {} with required capabilities: {}: {}",
+                &deployment,
+                &required_capabilities, e))?.clone();
+
         let subgraph_metrics = Arc::new(SubgraphInstanceMetrics::new(
             registry.clone(),
             deployment.hash.as_str(),
@@ -396,6 +397,7 @@ where
             manifest.network_name(),
             stopwatch_metrics,
         ));
+
         // Initialize deployment_head with current deployment head. Any sort of trouble in
         // getting the deployment head ptr leads to initializing with 0
         let deployment_head = store

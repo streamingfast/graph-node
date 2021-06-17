@@ -3,6 +3,7 @@ use std::iter::FromIterator;
 use std::{pin::Pin, sync::Arc, task::Context};
 
 use anyhow::Error;
+use graph::prelude::StopwatchMetrics;
 use graph::{
     blockchain::{
         block_stream::{
@@ -135,6 +136,7 @@ impl Blockchain for Chain {
         &self,
         loc: &DeploymentLocator,
         capabilities: &Self::NodeCapabilities,
+        stopwatch_metrics: Arc<StopwatchMetrics>,
     ) -> Result<Arc<Self::TriggersAdapter>, Error> {
         let eth_adapter = self.eth_adapters.cheapest_with(capabilities)?.clone();
         let logger = self
@@ -147,6 +149,7 @@ impl Blockchain for Chain {
             logger,
             ethrpc_metrics,
             eth_adapter,
+            stopwatch_metrics,
             chain_store: self.chain_store.cheap_clone(),
         };
         Ok(Arc::new(adapter))
@@ -173,7 +176,11 @@ impl Blockchain for Chain {
         let requirements = filter.node_capabilities();
 
         let triggers_adapter = self
-            .triggers_adapter(&deployment, &requirements)
+            .triggers_adapter(
+                &deployment,
+                &requirements,
+                Arc::new(metrics.stopwatch.clone()),
+            )
             .expect(&format!(
                 "no adapter for network {} with capabilities {}",
                 self.name, requirements
@@ -277,6 +284,7 @@ impl Manifest<Chain> for DummyManifest {
 pub struct TriggersAdapter {
     logger: Logger,
     ethrpc_metrics: Arc<SubgraphEthRpcMetrics>,
+    stopwatch_metrics: Arc<StopwatchMetrics>,
     chain_store: Arc<dyn ChainStore>,
     eth_adapter: Arc<EthereumAdapter>,
 }
@@ -294,6 +302,7 @@ impl TriggersAdapterTrait<Chain> for TriggersAdapter {
             self.logger.clone(),
             self.chain_store.clone(),
             self.ethrpc_metrics.clone(),
+            self.stopwatch_metrics.clone(),
             from,
             to,
             filter,
@@ -324,6 +333,7 @@ impl TriggersAdapterTrait<Chain> for TriggersAdapter {
                     logger.clone(),
                     self.chain_store.clone(),
                     self.ethrpc_metrics.clone(),
+                    self.stopwatch_metrics.clone(),
                     block_number,
                     block_number,
                     filter,
