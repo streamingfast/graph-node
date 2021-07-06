@@ -4,6 +4,7 @@
 
 pub mod block_ingestor;
 pub mod block_stream;
+pub mod buffered_block_stream;
 mod types;
 
 // Try to reexport most of the necessary types
@@ -57,7 +58,7 @@ pub trait Block: Send + Sync {
 
 #[async_trait]
 // This is only `Debug` because some tests require that
-pub trait Blockchain: Debug + Sized + Send + Sync + 'static {
+pub trait  Blockchain: Debug + Sized + Send + Sync + 'static {
     // The `Clone` bound is used when reprocessing a block, because `triggers_in_block` requires an
     // owned `Block`. It would be good to come up with a way to remove this bound.
     type Block: Block + Clone;
@@ -72,7 +73,7 @@ pub trait Blockchain: Debug + Sized + Send + Sync + 'static {
     type TriggersAdapter: TriggersAdapter<Self>;
 
     /// Trigger data as parsed from the triggers adapter.
-    type TriggerData: TriggerData + Ord;
+    type TriggerData: TriggerData + Ord + Send;
 
     /// Decoded trigger ready to be processed by the mapping.
     type MappingTrigger: MappingTrigger + Debug;
