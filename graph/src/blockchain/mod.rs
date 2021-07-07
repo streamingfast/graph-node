@@ -4,8 +4,11 @@
 
 pub mod block_ingestor;
 pub mod block_stream;
+pub mod block_stream_v2;
+
 pub mod buffered_block_stream;
 mod types;
+
 
 // Try to reexport most of the necessary types
 use crate::{

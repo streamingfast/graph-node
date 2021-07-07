@@ -129,7 +129,7 @@ impl BlockStreamMetrics {
     }
 }
 
-enum BlockStreamState<C>
+pub enum BlockStreamState<C>
 where
     C: Blockchain,
 {
@@ -187,7 +187,7 @@ where
     Done,
 }
 
-struct BlockStreamContext<C>
+pub struct BlockStreamContext<C>
 where
     C: Blockchain,
 {
@@ -253,7 +253,7 @@ pub struct BlockStream<C: Blockchain> {
 }
 
 // This is the same as `ReconciliationStep` but without retries.
-enum NextBlocks<C>
+pub enum NextBlocks<C>
 where
     C: Blockchain,
 {
@@ -318,7 +318,7 @@ where
     C: Blockchain,
 {
     /// Perform reconciliation steps until there are blocks to yield or we are up-to-date.
-    async fn next_blocks(&self) -> Result<NextBlocks<C>, Error> {
+    pub async fn next_blocks(&self) -> Result<NextBlocks<C>, Error> {
         let ctx = self.clone();
 
         loop {

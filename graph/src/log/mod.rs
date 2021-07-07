@@ -38,7 +38,7 @@ pub fn logger(show_debug: bool) -> Logger {
         .filter(
             None,
             if show_debug {
-                FilterLevel::Debug
+                FilterLevel::Trace
             } else {
                 FilterLevel::Info
             },

@@ -161,52 +161,6 @@ impl Blockchain for Chain {
         Ok(Arc::new(adapter))
     }
 
-    // fn new_block_stream(
-    //     &self,
-    //     deployment: DeploymentLocator,
-    //     start_blocks: Vec<BlockNumber>,
-    //     filter: TriggerFilter,
-    //     metrics: Arc<BlockStreamMetrics>,
-    //     unified_api_version: UnifiedMappingApiVersion,
-    // ) -> Result<BlockStream<Self>, Error> {
-    //     let logger = self
-    //         .logger_factory
-    //         .subgraph_logger(&deployment)
-    //         .new(o!("component" => "BlockStream"));
-    //     let chain_store = self.chain_store().clone();
-    //     let writable = self
-    //         .subgraph_store
-    //         .writable(&deployment)
-    //         .expect(&format!("no store for deployment `{}`", deployment.hash));
-    //     let chain_head_update_stream = self.chain_head_update_listener.subscribe(self.name.clone());
-    //
-    //     let requirements = filter.node_capabilities();
-    //
-    //     let triggers_adapter = self
-    //         .triggers_adapter(&deployment, &requirements, unified_api_version.clone())
-    //         .expect(&format!(
-    //             "no adapter for network {} with capabilities {}",
-    //             self.name, requirements
-    //         ));
-    //
-    //     Ok(BlockStream::new(
-    //         writable,
-    //         chain_store,
-    //         chain_head_update_stream,
-    //         triggers_adapter,
-    //         self.node_id.clone(),
-    //         deployment.hash,
-    //         filter,
-    //         start_blocks,
-    //         self.reorg_threshold,
-    //         logger,
-    //         metrics,
-    //         *MAX_BLOCK_RANGE_SIZE,
-    //         *TARGET_TRIGGERS_PER_BLOCK_RANGE,
-    //         unified_api_version,
-    //     ))
-    // }
-
     fn new_block_stream(
         &self,
         deployment: DeploymentLocator,
@@ -214,7 +168,7 @@ impl Blockchain for Chain {
         filter: TriggerFilter,
         metrics: Arc<BlockStreamMetrics>,
         unified_api_version: UnifiedMappingApiVersion,
-    ) -> Result<BufferedBlockStream<Self>, Error> {
+    ) -> Result<BlockStream<Self>, Error> {
         let logger = self
             .logger_factory
             .subgraph_logger(&deployment)
@@ -235,8 +189,7 @@ impl Blockchain for Chain {
                 self.name, requirements
             ));
 
-
-        let stream = BlockStream::new(
+        Ok(BlockStream::new(
             writable,
             chain_store,
             chain_head_update_stream,
@@ -251,9 +204,56 @@ impl Blockchain for Chain {
             *MAX_BLOCK_RANGE_SIZE,
             *TARGET_TRIGGERS_PER_BLOCK_RANGE,
             unified_api_version,
-        )
-        Ok(BufferedBlockStream::new(stream);
+        ))
     }
+
+    // fn new_block_stream(
+    //     &self,
+    //     deployment: DeploymentLocator,
+    //     start_blocks: Vec<BlockNumber>,
+    //     filter: TriggerFilter,
+    //     metrics: Arc<BlockStreamMetrics>,
+    //     unified_api_version: UnifiedMappingApiVersion,
+    // ) -> Result<BufferedBlockStream<Self>, Error> {
+    //     let logger = self
+    //         .logger_factory
+    //         .subgraph_logger(&deployment)
+    //         .new(o!("component" => "BlockStream"));
+    //     let chain_store = self.chain_store().clone();
+    //     let writable = self
+    //         .subgraph_store
+    //         .writable(&deployment)
+    //         .expect(&format!("no store for deployment `{}`", deployment.hash));
+    //     let chain_head_update_stream = self.chain_head_update_listener.subscribe(self.name.clone());
+    //
+    //     let requirements = filter.node_capabilities();
+    //
+    //     let triggers_adapter = self
+    //         .triggers_adapter(&deployment, &requirements, unified_api_version.clone())
+    //         .expect(&format!(
+    //             "no adapter for network {} with capabilities {}",
+    //             self.name, requirements
+    //         ));
+    //
+    //
+    //     let stream = BlockStream::new(
+    //         writable,
+    //         chain_store,
+    //         chain_head_update_stream,
+    //         triggers_adapter,
+    //         self.node_id.clone(),
+    //         deployment.hash,
+    //         filter,
+    //         start_blocks,
+    //         self.reorg_threshold,
+    //         logger,
+    //         metrics,
+    //         *MAX_BLOCK_RANGE_SIZE,
+    //         *TARGET_TRIGGERS_PER_BLOCK_RANGE,
+    //         unified_api_version,
+    //     )
+    //     Ok(BufferedBlockStream::new(stream);
+    // }
 
     fn ingestor_adapter(&self) -> Arc<Self::IngestorAdapter> {
         let eth_adapter = self.eth_adapters.cheapest().unwrap().clone();
