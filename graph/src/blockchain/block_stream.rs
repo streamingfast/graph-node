@@ -201,13 +201,13 @@ where
     reorg_threshold: BlockNumber,
     filter: Arc<C::TriggerFilter>,
     start_blocks: Vec<BlockNumber>,
-    logger: Logger,
+    pub logger: Logger,
     metrics: Arc<BlockStreamMetrics>,
-    previous_triggers_per_block: f64,
+    pub(crate) previous_triggers_per_block: f64,
     // Not a BlockNumber, but the difference between two block numbers
-    previous_block_range_size: BlockNumber,
+    pub(crate) previous_block_range_size: BlockNumber,
     // Not a BlockNumber, but the difference between two block numbers
-    max_block_range_size: BlockNumber,
+    pub(crate) max_block_range_size: BlockNumber,
     target_triggers_per_block_range: u64,
     unified_api_version: UnifiedMappingApiVersion,
 }

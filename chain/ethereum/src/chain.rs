@@ -37,7 +37,6 @@ use crate::{
     SubgraphEthRpcMetrics, TriggerFilter,
 };
 use crate::{network::EthereumNetworkAdapters, EthereumAdapter};
-use graph::blockchain::buffered_block_stream::BufferedBlockStream;
 
 lazy_static! {
     /// Maximum number of blocks to request in each chunk.

@@ -240,9 +240,9 @@ async fn create_ethereum_networks(
 
 
             let (transport_event_loop, transport) = match provider.transport {
-                Rpc => graph_chain_ethereum::Transport::new_rpc(&provider.url, provider.headers),
-                Ipc => graph_chain_ethereum::Transport::new_ipc(&provider.url),
-                Ws => graph_chain_ethereum::Transport::new_ws(&provider.url),
+                rpc => graph_chain_ethereum::Transport::new_rpc(&provider.url, provider.headers),
+                ipc => graph_chain_ethereum::Transport::new_ipc(&provider.url),
+                ws => graph_chain_ethereum::Transport::new_ws(&provider.url),
             };
 
             // If we drop the event loop the transport will stop working.
@@ -314,7 +314,7 @@ async fn connect_networks(
                 {
                     // An `Err` means a timeout, an `Ok(Err)` means some other error (maybe a typo
                     // on the URL)
-                    Ok(Err(e)) | Err(e) => {
+                    Ok(Err(_)) | Err(_) => {
                         Status::Broken {
                             network,
                             provider: eth_adapter.provider().to_string(),
