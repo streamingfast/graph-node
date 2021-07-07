@@ -482,7 +482,7 @@ where
             .new_block_stream(
                 ctx.inputs.deployment.clone(),
                 ctx.inputs.start_blocks.clone(),
-                ctx.state.filter.clone(),
+                Arc::new(ctx.state.filter.clone()),
                 ctx.block_stream_metrics.clone(),
                 ctx.inputs.unified_api_version.clone(),
             )?

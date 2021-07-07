@@ -12,6 +12,7 @@ use std::collections::VecDeque;
 use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::fs::read;
 
 pub enum BlockStreamState<C>
 where
@@ -25,19 +26,19 @@ where
     /// The BlockStream is reconciling the subgraph store state with the chain store state.
     ///
     /// Valid next states: YieldingBlocks, Idle, BeginReconciliation (in case of revert)
-    Reconciliation(Box<dyn Future<Output = Result<NextBlocks<C>, Error>> + Send>),
+    Reconciliation(Pin<Box<dyn Future<Output = Result<NextBlocks<C>, Error>> + Send>>),
 
     /// The BlockStream is emitting blocks that must be processed in order to bring the subgraph
     /// store up to date with the chain store.
     ///
     /// Valid next states: BeginReconciliation
-    YieldingBlocks(VecDeque<BlockWithTriggers<C>>),
+    YieldingBlocks(Box<VecDeque<BlockWithTriggers<C>>>),
 
     /// The BlockStream experienced an error and is pausing before attempting to produce
     /// blocks again.
     ///
     /// Valid next states: BeginReconciliation
-    RetryAfterDelay(Box<dyn Future<Output = Result<(), Error>> + Send>),
+    RetryAfterDelay(Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>),
 
     /// The BlockStream has reconciled the subgraph store and chain store states.
     /// No more work is needed until a chain head update.
@@ -51,8 +52,8 @@ where
 
 pub struct BlockStream<C: Blockchain> {
     state: BlockStreamState<C>,
-    consecutive_err_count: u32,
-    chain_head_update_stream: ChainHeadUpdateStream,
+    // consecutive_err_count: u32,
+    // chain_head_update_stream: ChainHeadUpdateStream,
     ctx: BlockStreamContext<C>,
 }
 
@@ -62,20 +63,19 @@ where
 {
     type Item = Result<BlockStreamEvent<C>, Error>;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut state = BlockStreamState::Transition;
-        mem::swap(&mut self.state, &mut state);
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
 
         let result = loop {
-            match state {
+            match &mut self.state {
                 BlockStreamState::BeginReconciliation => {
                     // Start the reconciliation process by asking for blocks
                     let ctx = self.ctx.clone();
                     let fut = async move { ctx.next_blocks().await };
-                    state = BlockStreamState::Reconciliation(Box::new(fut.boxed()));
+                    // let fut = async move { next_blocks().await };
+                    self.state = BlockStreamState::Reconciliation(fut.boxed());
                 }
-                BlockStreamState::Reconciliation(mut next_blocks_future) => {
-                    match next_blocks_future.poll(cx.clone()) {
+                BlockStreamState::Reconciliation(next_blocks_future) => {
+                    match next_blocks_future.poll_unpin(cx) {
                         Poll::Ready(Ok(NextBlocks::Blocks(next_blocks, block_range_size))) => {}
                         Poll::Ready(Ok(NextBlocks::Done)) => {}
                         Poll::Ready(Ok(NextBlocks::Revert(block))) => {}
@@ -83,17 +83,10 @@ where
                         Poll::Pending => {}
                     }
                 }
-
-                // BlockStreamState::YieldingBlocks(mut next_blocks) => {}
-                //
-                // BlockStreamState::RetryAfterDelay(mut delay) => {}
-
-                // Waiting for a chain head update
                 BlockStreamState::Idle => {}
-
-                // This will only happen if this poll function fails to complete normally then is
-                // called again.
+                BlockStreamState::RetryAfterDelay(_) => {}
                 BlockStreamState::Transition => unreachable!(),
+                _ => {}
             }
         };
     }

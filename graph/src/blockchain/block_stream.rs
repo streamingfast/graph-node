@@ -199,7 +199,7 @@ where
     // This is not really a block number, but the (unsigned) difference
     // between two block numbers
     reorg_threshold: BlockNumber,
-    filter: C::TriggerFilter,
+    filter: Arc<C::TriggerFilter>,
     start_blocks: Vec<BlockNumber>,
     logger: Logger,
     metrics: Arc<BlockStreamMetrics>,
@@ -277,7 +277,7 @@ where
         adapter: Arc<C::TriggersAdapter>,
         node_id: NodeId,
         subgraph_id: DeploymentHash,
-        filter: C::TriggerFilter,
+        filter: Arc<C::TriggerFilter>,
         start_blocks: Vec<BlockNumber>,
         reorg_threshold: BlockNumber,
         logger: Logger,

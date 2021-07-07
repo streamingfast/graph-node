@@ -165,7 +165,7 @@ async fn main() {
     let mut block_stream = chain.new_block_stream(
         deployment_locator.clone(),
         vec![10].clone(),
-        filter.clone(),
+        Arc::new(filter.clone()),
         block_stream_metrics.clone(),
         unified_api_version.clone(),
     ).unwrap()

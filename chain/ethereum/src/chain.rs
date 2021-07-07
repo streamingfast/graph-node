@@ -165,7 +165,7 @@ impl Blockchain for Chain {
         &self,
         deployment: DeploymentLocator,
         start_blocks: Vec<BlockNumber>,
-        filter: TriggerFilter,
+        filter: Arc<TriggerFilter>,
         metrics: Arc<BlockStreamMetrics>,
         unified_api_version: UnifiedMappingApiVersion,
     ) -> Result<BlockStream<Self>, Error> {

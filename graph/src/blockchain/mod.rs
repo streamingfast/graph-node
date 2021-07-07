@@ -61,7 +61,7 @@ pub trait Block: Send + Sync {
 
 #[async_trait]
 // This is only `Debug` because some tests require that
-pub trait  Blockchain: Debug + Sized + Send + Sync + 'static {
+pub trait  Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
     // The `Clone` bound is used when reprocessing a block, because `triggers_in_block` requires an
     // owned `Block`. It would be good to come up with a way to remove this bound.
     type Block: Block + Clone;
@@ -103,7 +103,7 @@ pub trait  Blockchain: Debug + Sized + Send + Sync + 'static {
         &self,
         deployment: DeploymentLocator,
         start_blocks: Vec<BlockNumber>,
-        filter: Self::TriggerFilter,
+        filter: Arc<Self::TriggerFilter>,
         metrics: Arc<BlockStreamMetrics>,
         unified_api_version: UnifiedMappingApiVersion,
     ) -> Result<BlockStream<Self>, Error>;
