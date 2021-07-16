@@ -28,6 +28,7 @@ use graph::{components::ethereum::NodeCapabilities, data::store::scalar::Bytes};
 
 use super::loader::load_dynamic_data_sources;
 use super::SubgraphInstance;
+use std::env::VarError;
 
 lazy_static! {
     /// Size limit of the entity LFU cache, in bytes.
@@ -497,6 +498,10 @@ where
         debug!(logger, "Starting block stream");
 
         // Process events from the stream as long as no restart is needed
+        let stop_block: Option<BlockNumber> = match std::env::var("GRAPH_STOP_BLOCK") {
+            Ok(v) => Some(BlockNumber::from(v.parse::<i32>().unwrap_or(0))),
+            Err(_) => None,
+        };
         loop {
             let block = match block_stream.next().await {
                 Some(Ok(BlockStreamEvent::ProcessBlock(block))) => block,
@@ -565,6 +570,16 @@ where
             };
 
             let block_ptr = block.ptr();
+
+            match stop_block.clone() {
+                Some(stop_block) => {
+                    if block_ptr.number > stop_block {
+                        info!(&logger, "stop block reached for subgraph");
+                        return Ok(());
+                    }
+                }
+                _ => {}
+            }
 
             if block.trigger_count() > 0 {
                 subgraph_metrics
