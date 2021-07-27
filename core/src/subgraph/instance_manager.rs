@@ -43,6 +43,13 @@ lazy_static! {
     // Used for testing Graph Node itself.
     pub static ref DISABLE_FAIL_FAST: bool =
         std::env::var("GRAPH_DISABLE_FAIL_FAST").is_ok();
+
+    // Wether we want to write a POI debug file
+    // Useful for comparing outputs of same subgraphs from the same starting point,
+    // with different Graph Node versions or parameters
+    pub static ref GRAPH_DEBUG_POI_FILE: String =
+        std::env::var("GRAPH_DEBUG_POI_FILE").unwrap_or_default();
+
 }
 
 type SharedInstanceKeepAliveMap = Arc<RwLock<HashMap<DeploymentId, CancelGuard>>>;
@@ -68,6 +75,9 @@ struct IndexingState<T: RuntimeHostBuilder<C>, C: Blockchain> {
 struct IndexingContext<T: RuntimeHostBuilder<C>, C: Blockchain> {
     /// Read only inputs that are needed while indexing a subgraph.
     pub inputs: IndexingInputs<C>,
+
+    /// Optional file to write Blocknum,deployment_id,POI_hex on each line, for debugging
+    pub debug_poi_writer: Option<Box<dyn std::io::Write + Send>>,
 
     /// Mutable state that may be modified while indexing a subgraph.
     pub state: IndexingState<T, C>,
@@ -416,6 +426,13 @@ where
                 triggers_adapter,
                 chain,
                 templates,
+            },
+            debug_poi_writer: if !GRAPH_DEBUG_POI_FILE.is_empty() {
+                let path = std::path::Path::new(GRAPH_DEBUG_POI_FILE.as_str());
+                let file = std::fs::File::create(&path)?;
+                Some(Box::new(file))
+            } else {
+                None
             },
             state: IndexingState {
                 logger: logger.cheap_clone(),
@@ -882,6 +899,7 @@ where
             &ctx.host_metrics.stopwatch,
             &ctx.inputs.deployment.hash,
             &mut block_state.entity_cache,
+            ctx.debug_poi_writer.as_mut(),
         )
         .await?;
     }
@@ -966,6 +984,7 @@ async fn update_proof_of_indexing(
     stopwatch: &StopwatchMetrics,
     deployment_id: &DeploymentHash,
     entity_cache: &mut EntityCache,
+    mut debug_poi_writer: Option<&mut Box<dyn std::io::Write + Send>>,
 ) -> Result<(), Error> {
     let _section_guard = stopwatch.start_section("update_proof_of_indexing");
 
@@ -988,6 +1007,26 @@ async fn update_proof_of_indexing(
                     Some(Value::Bytes(b)) => b.clone(),
                     _ => panic!("Expected POI entity to have a digest and for it to be bytes"),
                 });
+
+        if let Some(ref mut w) = debug_poi_writer {
+            if let Some(v) = prev_poi.clone() {
+                w.write_all(
+                    format!(
+                        "{},{},{}\n",
+                        entity_cache
+                            .store
+                            .block_ptr()
+                            .unwrap_or_default()
+                            .unwrap()
+                            .block_number(),
+                        v.to_string(),
+                        deployment_id,
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+            }
+        }
 
         // Finish the POI stream, getting the new POI value.
         let updated_proof_of_indexing = stream.pause(prev_poi.as_deref());

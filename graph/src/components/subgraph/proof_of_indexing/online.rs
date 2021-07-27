@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt;
 use web3::types::Address;
-use hex::ToHex;
 
 lazy_static! {
     static ref LOG_EVENTS: bool = std::env::var("GRAPH_LOG_POI_EVENTS")
@@ -239,7 +238,6 @@ impl ProofOfIndexingFinisher {
             .stable_hash(causality_regions_count_seq_no, &mut self.state);
 
         let poi_state = self.state.finish();
-        println!("POI: {}", poi_state.encode_hex());
         poi_state
     }
 }
