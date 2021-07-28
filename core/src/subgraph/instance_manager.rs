@@ -18,7 +18,9 @@ use graph::{
 };
 use graph::{
     blockchain::{block_stream::BlockStreamEvent, Blockchain, TriggerFilter as _},
-    components::subgraph::{MappingError, ProofOfIndexing, SharedProofOfIndexing},
+    components::subgraph::{
+        MappingError, ProofOfIndexing, ProofOfIndexingFinisher, SharedProofOfIndexing,
+    },
 };
 use graph::{
     blockchain::{Block, BlockchainMap},
@@ -28,7 +30,6 @@ use graph::{components::ethereum::NodeCapabilities, data::store::scalar::Bytes};
 
 use super::loader::load_dynamic_data_sources;
 use super::SubgraphInstance;
-use std::env::VarError;
 
 lazy_static! {
     /// Size limit of the entity LFU cache, in bytes.
@@ -995,7 +996,7 @@ async fn update_proof_of_indexing(
         let entity_key = EntityKey {
             subgraph_id: deployment_id.clone(),
             entity_type: POI_OBJECT.to_owned(),
-            entity_id: causality_region,
+            entity_id: causality_region.clone(),
         };
 
         // Grab the current digest attribute on this entity
@@ -1010,16 +1011,22 @@ async fn update_proof_of_indexing(
 
         if let Some(ref mut w) = debug_poi_writer {
             if let Some(v) = prev_poi.clone() {
+                let mut finisher = ProofOfIndexingFinisher::new(
+                    &entity_cache.store.block_ptr().unwrap_or_default().unwrap(),
+                    deployment_id,
+                    &None,
+                );
+                finisher.add_causality_region(&causality_region, &v);
+
+                let hashed = hex::encode(finisher.finish());
+                let block = entity_cache.store.block_ptr().unwrap_or_default().unwrap();
+
                 w.write_all(
                     format!(
-                        "{},{},{}\n",
-                        entity_cache
-                            .store
-                            .block_ptr()
-                            .unwrap_or_default()
-                            .unwrap()
-                            .block_number(),
-                        v.to_string(),
+                        "{},{},{},{}\n",
+                        block.block_number(),
+                        block.hash_hex(),
+                        hashed,
                         deployment_id,
                     )
                     .as_bytes(),
