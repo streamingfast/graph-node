@@ -45,11 +45,11 @@ pub async fn run(
     metrics_registry: Arc<MetricsRegistry>,
     node_id: NodeId,
     subgraph: String,
-    block_count: u64,
+    stop_block: BlockNumber,
 ) -> Result<(), anyhow::Error> {
     println!(
-        "Test run starting subgraph => {}, block_count = {}",
-        subgraph, block_count
+        "Test run starting subgraph => {}, stop_block = {}",
+        subgraph, stop_block
     );
 
     let logger_factory = LoggerFactory::new(logger.clone(), None);
@@ -191,10 +191,22 @@ pub async fn run(
         .first()
         .expect("At least one deployment should exist");
 
-    SubgraphAssignmentProvider::start(subgraph_provider.as_ref(), deployment.locator()).await?;
+    SubgraphAssignmentProvider::start(subgraph_provider.as_ref(), deployment.locator(), Some(stop_block)).await?;
 
-    tokio::time::sleep(Duration::from_millis(30000)).await;
+    loop {
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
+        let block_ptr = subgraph_store
+            .least_block_ptr(&subgraph_hash)
+            .unwrap()
+            .unwrap();
+
+        if block_ptr.number >= stop_block {
+            info!(&logger, "subgraph now at block {}, reached stop block {}", block_ptr.number, stop_block);
+            break;
+        }
+
+    }
     info!(&logger, "Removing subgraph {}", name);
     subgraph_store.clone().remove_subgraph(subgraph_name)?;
 

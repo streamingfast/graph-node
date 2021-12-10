@@ -153,7 +153,7 @@ pub enum Command {
         subgraph: String,
 
         /// Number of block to process
-        block_count: u64,
+        stop_block: i32,
     },
     /// Check and interrogate the configuration
     ///
@@ -608,7 +608,7 @@ async fn main() {
         TestRun {
             network_name,
             subgraph,
-            block_count,
+            stop_block,
         } => {
             let logger = ctx.logger.clone();
             let config = ctx.config();
@@ -625,7 +625,7 @@ async fn main() {
                 registry,
                 node_id,
                 subgraph,
-                block_count,
+                stop_block,
             )
             .await
         }
