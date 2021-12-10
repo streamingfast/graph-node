@@ -45,6 +45,13 @@ lazy_static! {
     pub static ref DISABLE_FAIL_FAST: bool =
         std::env::var("GRAPH_DISABLE_FAIL_FAST").is_ok();
 
+    // Wether we want to write a POI debug file
+    // Useful for comparing outputs of same subgraphs from the same starting point,
+    // with different Graph Node versions or parameters
+    pub static ref GRAPH_DEBUG_POI_FILE: String =
+        std::env::var("GRAPH_DEBUG_POI_FILE").unwrap_or_default();
+
+
     /// Ceiling for the backoff retry of non-deterministic errors, in seconds.
     pub static ref SUBGRAPH_ERROR_RETRY_CEIL_SECS: Duration =
         std::env::var("GRAPH_SUBGRAPH_ERROR_RETRY_CEIL_SECS")
@@ -79,6 +86,9 @@ struct IndexingState<T: RuntimeHostBuilder<C>, C: Blockchain> {
 struct IndexingContext<T: RuntimeHostBuilder<C>, C: Blockchain> {
     /// Read only inputs that are needed while indexing a subgraph.
     pub inputs: IndexingInputs<C>,
+
+    /// Optional file to write Blocknum,deployment_id,POI_hex on each line, for debugging
+    pub debug_poi_writer: Option<Box<dyn std::io::Write + Send>>,
 
     /// Mutable state that may be modified while indexing a subgraph.
     pub state: IndexingState<T, C>,
@@ -203,13 +213,17 @@ where
             match BlockchainKind::from_manifest(&manifest)? {
                 BlockchainKind::Ethereum => {
                     instance_manager
-                        .start_subgraph_inner::<graph_chain_ethereum::Chain>(logger, loc, manifest, stop_block)
+                        .start_subgraph_inner::<graph_chain_ethereum::Chain>(
+                            logger, loc, manifest, stop_block,
+                        )
                         .await
                 }
 
                 BlockchainKind::Near => {
                     instance_manager
-                        .start_subgraph_inner::<graph_chain_near::Chain>(logger, loc, manifest, stop_block)
+                        .start_subgraph_inner::<graph_chain_near::Chain>(
+                            logger, loc, manifest, stop_block,
+                        )
                         .await
                 }
             }
@@ -422,6 +436,13 @@ where
                 templates,
                 unified_api_version,
             },
+            debug_poi_writer: if !GRAPH_DEBUG_POI_FILE.is_empty() {
+                let path = std::path::Path::new(GRAPH_DEBUG_POI_FILE.as_str());
+                let file = std::fs::File::create(&path)?;
+                Some(Box::new(file))
+            } else {
+                None
+            },
             state: IndexingState {
                 logger: logger.cheap_clone(),
                 instance,
@@ -601,7 +622,6 @@ where
             };
 
             let block_ptr = block.ptr();
-
 
             match ctx.inputs.stop_block.clone() {
                 Some(stop_block) => {
@@ -1006,6 +1026,7 @@ async fn process_block<T: RuntimeHostBuilder<C>, C: Blockchain>(
             &ctx.host_metrics.stopwatch,
             &ctx.inputs.deployment.hash,
             &mut block_state.entity_cache,
+            ctx.debug_poi_writer.as_mut(),
         )
         .await?;
     }
@@ -1123,6 +1144,7 @@ async fn update_proof_of_indexing(
     stopwatch: &StopwatchMetrics,
     deployment_id: &DeploymentHash,
     entity_cache: &mut EntityCache,
+    mut debug_poi_writer: Option<&mut Box<dyn std::io::Write + Send>>,
 ) -> Result<(), Error> {
     let _section_guard = stopwatch.start_section("update_proof_of_indexing");
 
@@ -1146,6 +1168,25 @@ async fn update_proof_of_indexing(
                     _ => panic!("Expected POI entity to have a digest and for it to be bytes"),
                 });
 
+        if let Some(ref mut w) = debug_poi_writer {
+            if let Some(v) = prev_poi.clone() {
+                w.write_all(
+                    format!(
+                        "{},{},{}\n",
+                        entity_cache
+                            .store
+                            .block_ptr()
+                            .unwrap_or_default()
+                            .unwrap()
+                            .block_number(),
+                        v.to_string(),
+                        deployment_id,
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+            }
+        }
         // Finish the POI stream, getting the new POI value.
         let updated_proof_of_indexing = stream.pause(prev_poi.as_deref());
         let updated_proof_of_indexing: Bytes = (&updated_proof_of_indexing[..]).into();
