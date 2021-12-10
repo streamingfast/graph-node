@@ -1324,6 +1324,22 @@ pub trait ChainStore: Send + Sync + 'static {
     /// The head block cursor will be None on initial set up.
     fn chain_head_cursor(&self) -> Result<Option<String>, Error>;
 
+    /// Get the current backfill block cursor for this chain.
+    /// Any changes to the backfill block cursor will be to a block with a larger block number, never
+    /// to a block with a smaller or equal block number.
+    ///
+    /// The backfill block cursor will be None on initial set up.
+    fn chain_backfill_cursor(&self) -> Result<Option<String>, Error>;  //TODO: implement this
+
+    /// Set the current backfill cursor for this chain.
+    async fn set_chain_backfill_cursor(self: Arc<Self>, cursor: String) -> Result<(), Error>; //TODO: implement this
+
+    //TODO: docstring
+    fn chain_backfill_target_block_num(&self) -> Result<Option<i64>, Error>; //TODO: implement this
+
+    //TODO: docstring
+    async fn set_chain_backfill_target_block_num(self: Arc<Self>, block_num: i64) -> Result<(), Error>; //TODO: implement this
+
     /// Set the current head block cursor for this chain.
     async fn set_chain_head_cursor(self: Arc<Self>, cursor: String) -> Result<(), Error>;
 
