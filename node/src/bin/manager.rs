@@ -614,6 +614,9 @@ async fn main() {
             let config = ctx.config();
             let registry = ctx.metrics_registry().clone();
             let node_id = ctx.node_id().clone();
+            // FIXME this must be run before store_and_primary but should be pushed further down
+            let _store_builder =
+                StoreBuilder::new(&logger, &node_id, &config, registry.clone()).await;
             let (store, primary) = ctx.store_and_primary();
 
             commands::test_run::run(
