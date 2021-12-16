@@ -1,0 +1,130 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [feature/graphman-test-run]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  GRAPH_LOG: info
+  STREAMING_FAST_API_TOKEN: ${{ secrets.STREAMING_FAST_API_TOKEN }}
+  STREAMING_FAST_ETH_MAINNET_RPC: ${{ secrets.STREAMING_FAST_ETH_MAINNET_RPC }}
+  POSTGRES_PASSWORD: let-me-in
+  POSTGRES_DB: graph-node
+  POSTGRES_USER: graph-node
+  POSTGRES_HOSTPORT: localhost:5432
+
+jobs:
+  compare-dense:
+    name: Compare firehose with RPC-only on a dense segment
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["stable"]
+    environment: eth-mainnet
+    runs-on: ubuntu-latest
+    services:
+      ipfs:
+        image: ipfs/go-ipfs:v0.4.23
+        ports:
+          - 5001:5001
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: let-me-in
+          POSTGRES_DB: graph-node
+          POSTGRES_USER: graph-node
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Checkout sf config dev sources
+        uses: actions/checkout@v2
+        with:
+          repository: streamingfast/graph-node-dev
+          path: graph-node-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: test-cargo-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Install rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - name: Install lld
+        run: sudo apt-get install -y lld
+
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '17.2'
+
+      - run: |
+          echo "installing graph-cli"
+          npm install -g @graphprotocol/graph-cli
+          echo "building the mainnet-events subgraph"
+          set -o pipefail
+          pushd graph-node-dev
+          yarn
+          graph build  --ipfs http://localhost:5001 subgraphs/ethereum/transfer/mainnet-events.yaml |tee buildout
+          IPFS_HASH="$(awk '/Build.completed/ {print $3}' buildout)"
+          echo "exporting ipfs hash $IPFS_HASH"
+          echo "ipfs_hash=$IPFS_HASH" >> $GITHUB_ENV
+          popd
+
+      - name: Build graphman
+        env:
+          RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --bin graphman
+
+      - name: run firehose test
+        run: target/debug/graphman --config graph-node-dev/config/eth-mainnet-firehose.toml test-run eth-mainnet "${{ env.ipfs_hash }}" 11000100
+        env:
+          GRAPH_DEBUG_POI_FILE: poi_firehose.csv
+
+      - name: cleanup
+        run: |
+          target/debug/graphman --config graph-node-dev/config/eth-mainnet-firehose.toml remove sf/transfer
+          target/debug/graphman --config graph-node-dev/config/eth-mainnet-firehose.toml unused record
+          target/debug/graphman --config graph-node-dev/config/eth-mainnet-firehose.toml unused remove
+
+      - name: work around rpc existing blocks requirement
+        run: |
+          sudo apt-get install --yes --no-install-recommends postgresql-client
+          psql postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOSTPORT}/${POSTGRES_DB} -c \
+          "update public.ethereum_networks set head_block_hash='d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3',head_block_number=99999999 where name='eth-mainnet'"
+
+      - name: run rpc test
+        run: target/debug/graphman --config graph-node-dev/config/eth-mainnet-rpc.toml test-run eth-mainnet "${{ env.ipfs_hash }}" 11000100
+        env:
+          GRAPH_DEBUG_POI_FILE: poi_rpc.csv
+
+      - name: Upload result firehose
+        uses: actions/upload-artifact@v2
+        with:
+          name: poi_firehose
+          path: poi_firehose.csv
+
+      - name: Upload result RPC
+        uses: actions/upload-artifact@v2
+        with:
+          name: poi_rpc
+          path: poi_rpc.csv
