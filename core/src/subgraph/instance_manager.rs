@@ -623,16 +623,6 @@ where
 
             let block_ptr = block.ptr();
 
-            match ctx.inputs.stop_block.clone() {
-                Some(stop_block) => {
-                    if block_ptr.number > stop_block {
-                        info!(&logger, "stop block reached for subgraph");
-                        return Ok(());
-                    }
-                }
-                _ => {}
-            }
-
             if block.trigger_count() > 0 {
                 subgraph_metrics
                     .block_trigger_count
@@ -679,6 +669,16 @@ where
 
             let elapsed = start.elapsed().as_secs_f64();
             subgraph_metrics.block_processing_duration.observe(elapsed);
+
+            match ctx.inputs.stop_block.clone() {
+                Some(stop_block) => {
+                    if block_ptr.number > stop_block {
+                        info!(&logger, "stop block reached for subgraph");
+                        return Ok(());
+                    }
+                }
+                _ => {}
+            }
 
             match res {
                 Ok(needs_restart) => {

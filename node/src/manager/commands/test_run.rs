@@ -196,6 +196,7 @@ pub async fn run(
             info!(&logger, "subgraph now at block {}, reached stop block {}", block_ptr.number, stop_block);
             break;
         }
+        info!(&logger, "subgraph not at block ok, block {}, wanted {}", block_ptr.number, stop_block);
 
     }
     info!(&logger, "Removing subgraph {}", name);
