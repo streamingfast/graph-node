@@ -106,7 +106,7 @@ jobs:
         run: |
           chmod +x bin/graphman
           bin/graphman --config config/eth-mainnet-firehose.toml test-run eth-mainnet "${{ env.ipfs_hash }}" 11000100
-          psql ${POSTGRES_URL} -c "\copy (select encode(digest::bytea, 'hex'), block_range FROM sgd1.poi2$) TO 'dense_events_poi_firehose.csv' With CSV"
+          psql ${POSTGRES_URL} -c "\copy (select encode(digest::bytea, 'hex'), block_range FROM sgd1.poi2$ order by block_range asc) TO 'dense_events_poi_firehose.csv' With CSV"
 
       - name: cleanup
         run: |
@@ -123,7 +123,7 @@ jobs:
         run: |
           bin/graphman --config config/eth-mainnet-rpc.toml test-run eth-mainnet "${{ env.ipfs_hash }}" 11000100
           psql ${POSTGRES_URL} -c \
-          "\copy (select encode(digest::bytea, 'hex'), block_range FROM sgd2.poi2$) TO 'dense_events_poi_rpc.csv' With CSV"
+          "\copy (select encode(digest::bytea, 'hex'), block_range FROM sgd2.poi2$ order by block_range asc) TO 'dense_events_poi_rpc.csv' With CSV"
 
       - name: Upload results
         uses: actions/upload-artifact@v2
@@ -192,7 +192,7 @@ jobs:
           chmod +x bin/graphman
           bin/graphman --config config/eth-mainnet-firehose.toml test-run eth-mainnet "${{ env.ipfs_hash }}" 11000100
           psql ${POSTGRES_URL} -c \
-          "\copy (select encode(digest::bytea, 'hex'), block_range FROM sgd1.poi2$) TO 'dense_calls_poi_firehose.csv' With CSV"
+          "\copy (select encode(digest::bytea, 'hex'), block_range FROM sgd1.poi2$ order by block_range asc) TO 'dense_calls_poi_firehose.csv' With CSV"
 
       - name: cleanup
         run: |
@@ -209,7 +209,7 @@ jobs:
         run: |
           bin/graphman --config config/eth-mainnet-rpc.toml test-run eth-mainnet "${{ env.ipfs_hash }}" 11000100
           psql ${POSTGRES_URL} -c \
-          "\copy (select encode(digest::bytea, 'hex'), block_range FROM sgd2.poi2$) TO 'dense_calls_poi_rpc.csv' With CSV"
+          "\copy (select encode(digest::bytea, 'hex'), block_range FROM sgd2.poi2$ order by block_range asc) TO 'dense_calls_poi_rpc.csv' With CSV"
 
       - name: Upload results
         uses: actions/upload-artifact@v2
