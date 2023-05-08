@@ -76,6 +76,7 @@ impl stable_hash_legacy::StableHash for ProofOfIndexingEvent<'_> {
                 id,
                 data,
             } => {
+                println!("Legacy hasher!");
                 entity_type.stable_hash(sequence_number.next_child(), state);
                 id.stable_hash(sequence_number.next_child(), state);
                 data.stable_hash(sequence_number.next_child(), state);
@@ -102,9 +103,26 @@ impl stable_hash::StableHash for ProofOfIndexingEvent<'_> {
                 id,
                 data,
             } => {
+                println!(
+                    "Entity {}@{} poi before {}",
+                    entity_type,
+                    id,
+                    hex::encode(state.to_bytes())
+                );
+
                 entity_type.stable_hash(field_address.child(0), state);
+
+                println!("Entity poi after type {}", hex::encode(state.to_bytes()),);
+
                 id.stable_hash(field_address.child(1), state);
+
+                println!("Entity poi after id {}", hex::encode(state.to_bytes()),);
+
                 data.stable_hash(field_address.child(2), state);
+
+                println!("Entity poi after fields {}", hex::encode(state.to_bytes()),);
+
+                println!();
                 2
             }
             Self::DeterministicError { redacted_events } => {

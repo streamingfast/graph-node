@@ -45,6 +45,14 @@ impl Hashers {
         }
     }
 
+    fn to_bytes(&self) -> Vec<u8> {
+        if let Hashers::Fast(fast) = self {
+            fast.to_bytes().to_vec()
+        } else {
+            vec![]
+        }
+    }
+
     fn write<T>(&mut self, value: &T, children: &[u64])
     where
         T: StableHash + StableHashLegacy,
@@ -134,10 +142,25 @@ impl BlockEventStream {
                     let prev = prev
                         .try_into()
                         .expect("Expected valid fast stable hash representation");
+
+                    println!(
+                        "Pausing for block {} previous {}",
+                        self.block_index,
+                        hex::encode(&prev)
+                    );
+
                     let prev = FastStableHasher::from_bytes(prev);
                     digest.mixin(&prev);
                 }
-                digest.to_bytes().to_vec()
+                let out = digest.to_bytes().to_vec();
+
+                println!(
+                    "Final digest after pause for block {} is {}",
+                    self.block_index,
+                    hex::encode(&out)
+                );
+
+                out
             }
         }
     }
@@ -239,6 +262,16 @@ impl ProofOfIndexing {
 
     pub fn take(self) -> HashMap<String, BlockEventStream> {
         self.per_causality_region
+    }
+
+    pub fn bytes_onchain(&self) -> String {
+        let region = "ethereum/mainnet".to_string();
+        let on_chain = self.per_causality_region.get(&region);
+
+        match on_chain {
+            Some(x) => hex::encode(x.hasher.to_bytes()),
+            None => "".to_string(),
+        }
     }
 }
 

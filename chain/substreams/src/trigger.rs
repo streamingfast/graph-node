@@ -157,6 +157,7 @@ fn write_poi_event(
 ) {
     if let Some(proof_of_indexing) = proof_of_indexing {
         let mut proof_of_indexing = proof_of_indexing.deref().borrow_mut();
+
         proof_of_indexing.write(logger, causality_region, poi_event);
     }
 }
@@ -189,6 +190,11 @@ where
         _subgraph_metrics: &Arc<graph::prelude::SubgraphInstanceMetrics>,
         _instrument: bool,
     ) -> Result<BlockState<Chain>, MappingError> {
+        if let Some(indexing) = proof_of_indexing {
+            let poi = indexing.deref().borrow().bytes_onchain();
+            println!("POI before process block {} is {}", block.number, poi);
+        };
+
         for entity_change in block.changes.entity_changes.iter() {
             match entity_change.operation() {
                 Operation::Unset => {
@@ -246,6 +252,14 @@ where
                         causality_region,
                         logger,
                     );
+
+                    if let Some(indexing) = proof_of_indexing {
+                        let poi = indexing.deref().borrow().bytes_onchain();
+                        println!(
+                            "POI after entity change ({} @ {}) in block {} is {}",
+                            entity_type, entity_id, block.number, poi
+                        );
+                    };
 
                     let key = EntityKey {
                         entity_type: entity_type,

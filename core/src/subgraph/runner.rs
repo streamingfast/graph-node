@@ -1094,6 +1094,7 @@ async fn update_proof_of_indexing(
                 _ => panic!("Expected POI entity to have a digest and for it to be bytes"),
             });
 
+        println!("Are we here in Substreams context or not?");
         // Finish the POI stream, getting the new POI value.
         let updated_proof_of_indexing = stream.pause(prev_poi.as_deref());
         let updated_proof_of_indexing: Bytes = (&updated_proof_of_indexing[..]).into();
