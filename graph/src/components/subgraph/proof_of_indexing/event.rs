@@ -112,15 +112,27 @@ impl stable_hash::StableHash for ProofOfIndexingEvent<'_> {
 
                 entity_type.stable_hash(field_address.child(0), state);
 
-                println!("Entity poi after type {}", hex::encode(state.to_bytes()),);
+                println!(
+                    "Entity poi after type {} (addr {})",
+                    hex::encode(state.to_bytes()),
+                    field_address.child(0)
+                );
 
                 id.stable_hash(field_address.child(1), state);
 
-                println!("Entity poi after id {}", hex::encode(state.to_bytes()),);
+                println!(
+                    "Entity poi after id {} (addr {})",
+                    hex::encode(state.to_bytes()),
+                    field_address.child(1)
+                );
 
                 data.stable_hash(field_address.child(2), state);
 
-                println!("Entity poi after fields {}", hex::encode(state.to_bytes()),);
+                println!(
+                    "Entity poi after fields {} (addr {})",
+                    hex::encode(state.to_bytes()),
+                    field_address.child(1)
+                );
 
                 println!();
                 2
