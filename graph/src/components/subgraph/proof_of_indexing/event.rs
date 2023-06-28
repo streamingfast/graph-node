@@ -115,7 +115,7 @@ impl stable_hash::StableHash for ProofOfIndexingEvent<'_> {
                 println!(
                     "Entity poi after type {} (addr {})",
                     hex::encode(state.to_bytes()),
-                    field_address.child(0)
+                    field_address.child(0).to_string()
                 );
 
                 id.stable_hash(field_address.child(1), state);
@@ -123,7 +123,7 @@ impl stable_hash::StableHash for ProofOfIndexingEvent<'_> {
                 println!(
                     "Entity poi after id {} (addr {})",
                     hex::encode(state.to_bytes()),
-                    field_address.child(1)
+                    field_address.child(1).to_string()
                 );
 
                 data.stable_hash(field_address.child(2), state);
@@ -131,7 +131,7 @@ impl stable_hash::StableHash for ProofOfIndexingEvent<'_> {
                 println!(
                     "Entity poi after fields {} (addr {})",
                     hex::encode(state.to_bytes()),
-                    field_address.child(1)
+                    field_address.child(1).to_string()
                 );
 
                 println!();
